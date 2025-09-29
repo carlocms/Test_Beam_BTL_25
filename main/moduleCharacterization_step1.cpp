@@ -36,6 +36,7 @@
 
 
 
+
 int main(int argc, char** argv)
 {
   setTDRStyle();
@@ -66,6 +67,9 @@ int main(int argc, char** argv)
   int useTrackInfo = opts.GetOpt<int>("Input.useTrackInfo");
   float my_step1 = opts.GetOpt<float>("Input.vov") ;
   
+  int DUTasic = opts.GetOpt<int>("Channels.DUTasic");
+  int REFasic = opts.GetOpt<int>("Channels.REFasic");
+
   std::string discCalibrationFile = opts.GetOpt<std::string>("Input.discCalibration");
   TOFHIRThresholdZero thrZero(discCalibrationFile,1);
 
@@ -144,7 +148,8 @@ int main(int argc, char** argv)
       
       struct stat t_stat;
       //stat(Form("/data/TOFHIR2/raw/run%04d.rawf",run), &t_stat);
-      stat(Form("/data1/cmsdaq/tofhir2/h8/raw/%04d/",run), &t_stat);
+      //stat(Form("/data1/cmsdaq/tofhir2/h8/raw/%04d/",run), &t_stat);
+      stat(Form("/data2/TOFHIR2/TB/raw/%04d/",run), &t_stat);
       //stat(Form("/eos/uscms/store/group/cmstestbeam/2023_03_cmstiming_BTL/TOFHIR/RawData/%s%05d.rawf/",fileBaseName.c_str(),run), &t_stat); // cmslpc
       struct tm * timeinfo = localtime(&t_stat.st_mtime);
       std::cout << "Time and date of raw file of run" << run << ": " << asctime(timeinfo);
@@ -157,16 +162,19 @@ int main(int argc, char** argv)
   
   int chL[16];
   int chR[16];
-  
   for(unsigned int iBar = 0; iBar < channelMapping.size()/2; ++iBar){
-    if(opts.GetOpt<int>("Channels.array")==0){
-      chL[iBar] = channelMapping[iBar*2+0];
-      chR[iBar] = channelMapping[iBar*2+1];
-    }
-    if(opts.GetOpt<int>("Channels.array")==1){
-      chL[iBar] = channelMapping[iBar*2+0]+64;
-      chR[iBar] = channelMapping[iBar*2+1]+64;
-    }
+
+      chL[iBar] = channelMapping[iBar*2+0]+32*DUTasic;
+      chR[iBar] = channelMapping[iBar*2+1]+32*DUTasic;
+      
+//    if(opts.GetOpt<int>("Channels.array")==0){
+//      chL[iBar] = channelMapping[iBar*2+0];
+//      chR[iBar] = channelMapping[iBar*2+1];
+//    }
+//    if(opts.GetOpt<int>("Channels.array")==1){
+//      chL[iBar] = channelMapping[iBar*2+0]+64;
+//      chR[iBar] = channelMapping[iBar*2+1]+64;
+//    }
     std::cout << "Bar: " << iBar << "   chL: "<< chL[iBar] << "    chR: " <<chR[iBar] <<std::endl;
   }
   
@@ -295,9 +303,15 @@ int main(int argc, char** argv)
 	float Vov = step1;
         float vth1 = float(int(step2/10000)-1);
         float vth2 = float(int((step2-10000*(vth1+1))/100.)-1);
+        float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
         float vth = 0.;
+	
+	if( entry%20000 == 0 ){
+	  std::cout << step2 << " ith1: " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
+	}
 	if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
 	if(!opts.GetOpt<std::string>("Input.vth").compare("vth2"))  { vth = vth2;}
+	if(!opts.GetOpt<std::string>("Input.vth").compare("vthE"))  { vth = vthE;}
 
 	// select only one OV
 	if (my_step1 > 0  && my_step1 != step1) continue;
@@ -340,12 +354,15 @@ int main(int argc, char** argv)
 
 
 	  for(int iBar = 0; iBar < int(channelMapping.size())/2; ++iBar) {
-	    int chL_iext = channelMapping[iBar*2+0];// module under test is array1, coincidence channel in array0 
-	    int chR_iext = channelMapping[iBar*2+1];// module under test is array1, coincidence channel in array0 
-	    if (opts.GetOpt<int>("Channels.array")==0) {
-	      int chL_iext = channelMapping[iBar*2+0]+64;// module under test is array0, coincidence channel in array1
-	      int chR_iext = channelMapping[iBar*2+1]+64;// module under test is array0, coincidence channel in array1
-	    }
+	    int chL_iext = channelMapping[iBar*2+0] + REFasic*32;
+	    int chR_iext = channelMapping[iBar*2+1] + REFasic*32;
+
+	   // int chL_iext = channelMapping[iBar*2+0];// module under test is array1, coincidence channel in array0 
+	   // int chR_iext = channelMapping[iBar*2+1];// module under test is array1, coincidence channel in array0 
+	   // if (opts.GetOpt<int>("Channels.array")==0) {
+	   //   int chL_iext = channelMapping[iBar*2+0]+64;// module under test is array0, coincidence channel in array1
+	   //   int chR_iext = channelMapping[iBar*2+1]+64;// module under test is array0, coincidence channel in array1
+	   // }
 	    float energyL_iext = (*energy)[channelIdx[chL_iext]];              
 	    float energyR_iext = (*energy)[channelIdx[chR_iext]]; 
 	    float totL_iext    = 0.001*(*tot)[channelIdx[chL_iext]];              
@@ -360,6 +377,7 @@ int main(int argc, char** argv)
 	  }
 	  //if (nActiveBarsArray > 5 ) continue;
 	  if (nActiveBarsArray > 3 ) continue;
+	//   if (nActiveBarsArray > 2 ) continue; //claudio
 	}
 	
 	energyL_ext = (*energy)[channelIdx[chL_ext]];
@@ -404,17 +422,23 @@ int main(int argc, char** argv)
 	  float Vov = float ((int(index.first /10000))/100.);
 	  float vth1 = float(int((index.first-Vov*10000*100)/100.));
 	  float vth2 = float(int((step2-10000*(vth1+1))/100.)-1);
+          float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
           float vth = 0;
-          if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
+       
+	  //std::cout << step2 << " ith1:1 " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
+       
+	  if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
           if(!opts.GetOpt<std::string>("Input.vth").compare("vth2"))  { vth = vth2;}
+	  if(!opts.GetOpt<std::string>("Input.vth").compare("vthE"))  { vth = vthE;}
 	  
-	  if( opts.GetOpt<int>("Channels.array") == 0){
-	    //	    index.second->GetXaxis()->SetRangeUser(50,900);
-	    index.second->GetXaxis()->SetRangeUser(200,900);
-	  }
-	  if( opts.GetOpt<int>("Channels.array") == 1){
-	    index.second->GetXaxis()->SetRangeUser(200,900);
-	  }
+	  index.second->GetXaxis()->SetRangeUser(200,900);
+	  //if( opts.GetOpt<int>("Channels.array") == 0){
+	  //  //	    index.second->GetXaxis()->SetRangeUser(50,900);
+	  //  index.second->GetXaxis()->SetRangeUser(200,900);
+	  //}
+	  //if( opts.GetOpt<int>("Channels.array") == 1){
+	  //  index.second->GetXaxis()->SetRangeUser(200,900);
+	  //}
 
 	  float max = index.second->GetBinCenter(index.second->GetMaximumBin());
 	  index.second->GetXaxis()->SetRangeUser(0,1024);
@@ -477,12 +501,18 @@ int main(int argc, char** argv)
     float Vov = step1;
     float vth1 = float(int(step2/10000)-1);
     float vth2 = int((step2-10000*(vth1+1))/100.)-1;
+    float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
     float vth = 0;
     std::string vthMode = opts.GetOpt<std::string>("Input.vth");
     if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
     if(!opts.GetOpt<std::string>("Input.vth").compare("vth2"))  { vth = vth2;}
+    if(!opts.GetOpt<std::string>("Input.vth").compare("vthE"))  { vth = vthE;}
     // float vthe = float(int((step2-10000*vth1-step2-100*vth2)/1)-1);
+    if( entry%20000 == 0 ){
+      std::cout << step2 << " ith1: " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
+    }
     
+    //std::cout << step2 << " ith1:1 " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
     // select only one OV
     if (my_step1 > 0  && my_step1 != step1) continue;
 
@@ -511,10 +541,14 @@ int main(int argc, char** argv)
     
     
     for(unsigned int iBar = 0; iBar < channelMapping.size()/2; ++iBar){
-
+      
       if (channelIdx[chL[iBar]] >=0 && channelIdx[chR[iBar]] >=0){
 	  
-	qfineL[iBar]=(*qfine)[channelIdx[chL[iBar]]];
+      //std::cout << " chinR "<< chR[iBar]<<" chIdx R " << channelIdx[chR[iBar]] << " chinL "<<chL[iBar] <<" chIdx L " << channelIdx[chL[iBar]] 
+      //        << " energyR " << (*energy)[channelIdx[chR[iBar]]] << " energyL " << (*energy)[channelIdx[chL[iBar]]] << std::endl;   
+
+      //std::cout<<" @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"<<std::endl;
+        qfineL[iBar]=(*qfine)[channelIdx[chL[iBar]]];
 	qfineR[iBar]=(*qfine)[channelIdx[chR[iBar]]];
 	totL[iBar]=0.001*(*tot)[channelIdx[chL[iBar]]];
 	totR[iBar]=0.001*(*tot)[channelIdx[chR[iBar]]];
@@ -524,6 +558,11 @@ int main(int argc, char** argv)
 	timeR[iBar]=(*time)[channelIdx[chR[iBar]]];
 	t1fineL[iBar]=(*t1fine)[channelIdx[chL[iBar]]];
 	t1fineR[iBar]=(*t1fine)[channelIdx[chR[iBar]]];
+
+       //std::cout << " chinR "<< chR[iBar]<<" chIdx R " << channelIdx[chR[iBar]] << " chinL "<<chL[iBar] <<" chIdx L " << channelIdx[chL[iBar]] << " energyR " << energyR[iBar] << " energyL " << energyL[iBar] << std::endl;   
+
+
+
 	}
       else
 	{
@@ -537,9 +576,10 @@ int main(int argc, char** argv)
 	  timeR[iBar]=-10;
 	  t1fineL[iBar]=-10;
 	  t1fineR[iBar]=-10;
-	}     
+	} 
+      //std::cout << " chinR "<< chR[iBar]<<" chIdx R " << channelIdx[chR[iBar]] << " chinL "<<chL[iBar] <<" chIdx L " << channelIdx[chL[iBar]] << " energyR " << energyR[iBar] << " energyL " << energyL[iBar] << std::endl;   
     }// end loop over bars
-    
+    //std::cout<<" @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"<<std::endl;
     int maxEn=0;
     int maxBar=0;
 
@@ -602,6 +642,8 @@ int main(int argc, char** argv)
 	  h1_totR[index] = new TH1F(Form("h1_tot_bar%02dR_Vov%.2f_th%02.0f",iBar,Vov,vth),"",400,-5.,35.);
 	  
 	  h1_energyL[index] = new TH1F(Form("h1_energy_bar%02dL_Vov%.2f_th%02.0f",iBar,Vov,vth),"",map_energyBins[Vov],map_energyMins[Vov],map_energyMaxs[Vov]);
+	  //h1_energyL[index] = new TH1F(Form("h1_energy_bar%02dL_Vov%.2f_th%02.0f",iBar,Vov,vth),"",map_energyBins[Vov],0,1024);
+	  //h1_energyR[index] = new TH1F(Form("h1_energy_bar%02dR_Vov%.2f_th%02.0f",iBar,Vov,vth),"",map_energyBins[Vov],map_energyMins[Vov],map_energyMaxs[Vov]);
 	  h1_energyR[index] = new TH1F(Form("h1_energy_bar%02dR_Vov%.2f_th%02.0f",iBar,Vov,vth),"",map_energyBins[Vov],map_energyMins[Vov],map_energyMaxs[Vov]);
 	  
 	  outTrees[index] = new TTree(Form("data_bar%02dL-R_Vov%.2f_th%02.0f",iBar,Vov,vth),Form("data_bar%02dL-R_Vov%.2f_th%02.0f",iBar,Vov,vth));
@@ -668,7 +710,7 @@ int main(int argc, char** argv)
 	}// -- end loop over bars
     
     // --- for Na22 or Laser analysis use only the bar with max energy to remove cross-talk between adjacent bars
-    if( !opts.GetOpt<std::string>("Input.sourceName").compare("Na22") |
+    if( !opts.GetOpt<std::string>("Input.sourceName").compare("Na22") ||
 	!opts.GetOpt<std::string>("Input.sourceName").compare("Na22SingleBar") ||
 	!opts.GetOpt<std::string>("Input.sourceName").compare("Laser") ||
 	!opts.GetOpt<std::string>("Input.sourceName").compare("keepAll") )
