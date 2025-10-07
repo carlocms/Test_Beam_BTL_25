@@ -13,6 +13,7 @@ import json
 parser = argparse.ArgumentParser(description='Module characterization summary plots')
 parser.add_argument("-i",  "--inputLabels",   required=True, type=str, help="comma-separated list of input labels")
 parser.add_argument("-m",  "--resMode",       required=True, type=int, help="resolution mode: 2 - tDiff, 1 - tAve")
+parser.add_argument("-t",  "--thRef",         required=True, type=int, help="choose the reference threshold among the ones you have")
 parser.add_argument("-o",  "--outFolder",     required=True, type=str, help="out folder")
 args = parser.parse_args()
 
@@ -70,16 +71,18 @@ def getTimeResolution(h1_deltaT):
 
 
 # ====================================
-
-
 # INPUT
-inputdir = '/data1/cmsdaq/Lab5015Analysis_new/TB_CERN_Sept2023/Lab5015Analysis/plots/'
+#inputdir = '/data1/cmsdaq/Lab5015Analysis_new/TB_CERN_Sept2023/Lab5015Analysis/plots/'
+inputdir = '/home/cmsdaq/TBAnalysis/TB_CERN_Sept2025/Lab5015Analysis/plots/'
 #source = 'Laser'
 source = 'TB'
 
 
 # OUTPUT
-outdir  = '/var/www/html/TOFHIR2C/MTDTB_CERN_Sept23/ModuleCharacterization/'
+#outdir  = '/var/www/html/TOFHIR2C/MTDTB_CERN_Sept23/ModuleCharacterization/'
+outdir  = '/var/www/html/TOFHIR2C/MTDTB_CERN_Sept25/ModuleCharacterization/'
+
+
 outdir=outdir+args.outFolder
 outFileName = inputdir+'/summaryPlots_'+args.outFolder+'.root'
 print 'Saving root file ', outFileName
@@ -127,8 +130,9 @@ if (source == 'TB'):
 cols = { 0.50 : 51,
          0.60 : 51+8,
          0.80 : 51+16,
+         0.90 : 51+20,
          1.00 : 51+24,
-         1.25 : 51+32,
+         1.20 : 51+32,
          1.50 : 51+40,
          2.00 : 51+44,
          2.50 : 51+46,
@@ -148,7 +152,7 @@ os.system('mkdir %s/summaryPlots/timeResolution/fits/'%outdir)
     
 
 # -- ref threhsold
-thRef = 11
+thRef = args.thRef
 
 # -- get list of bars, Vovs, thresholds to be analyzed
 bars = []

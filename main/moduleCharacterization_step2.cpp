@@ -631,14 +631,15 @@ int main(int argc, char** argv)
 	    ranges[LRLabel][index] -> push_back( histo -> GetBinCenter(500) );
 	    */
 	    
-	    if( opts.GetOpt<int>("Channels.array") == 1){
-	      histo->GetXaxis()->SetRangeUser(minE[std::make_pair(iBar, Vov)], 950);
-	    }
-	    if( opts.GetOpt<int>("Channels.array") == 0){
-	      histo->GetXaxis()->SetRangeUser(minE[std::make_pair(iBar, Vov)], 950);
-	    }
+	    // if( opts.GetOpt<int>("Channels.array") == 1){
+	    //   histo->GetXaxis()->SetRangeUser(minE[std::make_pair(iBar, Vov)], 950);
+	    // }
+	    // if( opts.GetOpt<int>("Channels.array") == 0){
+	    //   histo->GetXaxis()->SetRangeUser(minE[std::make_pair(iBar, Vov)], 950);
+	    // }
 	    float max = histo->GetBinCenter(histo->GetMaximumBin());
-	    histo->GetXaxis()->SetRangeUser(0,1024);
+	    //histo->GetXaxis()->SetRangeUser(0,1024);
+	    histo->GetXaxis()->SetRangeUser(minE[std::make_pair(iBar, Vov)], 950); // minE to avoid fitting noise
 	    
 	    f_gaus[index] = new TF1(Form("fit_energy_bar%02d%s_Vov%.2f_vth1_%02.0f",iBar,LRLabel.c_str(),Vov,vth1), "gaus", max-50, max+50);
 	    f_gaus[index]->SetParameters(histo->GetMaximumBin(), max, 70);
@@ -656,6 +657,8 @@ int main(int argc, char** argv)
 	    f_landau[index] = new TF1(Form("f_landau_bar%02d%s_Vov%.2f_vth1_%02.0f", iBar,LRLabel.c_str(),Vov,vth1),"[0]*TMath::Landau(x,[1],[2])", 0,1000.);
 	    float xmin = max * 0.65;
 	    float xmax = std::min(max*2.5, 940.);
+	    //float xmin = 0;
+	    //float xmax = 1000;
 	    f_landau[index] -> SetRange(xmin,xmax);
 	    f_landau[index] -> SetParameters(histo->Integral(histo->GetMaximumBin(), histo->GetNbinsX())/10, max, 0.1*max);
 	    f_landau[index] -> SetParLimits(1,0,9999);
@@ -680,6 +683,7 @@ int main(int argc, char** argv)
 	      //ranges[LRLabel][index] -> push_back( 0.75*f_landau[index]->GetParameter(1));
 	      //ranges[LRLabel][index] -> push_back( 0.60*f_landau[index]->GetParameter(1));
 	      ranges[LRLabel][index] -> push_back( f_landau[index]->GetParameter(1) - 2.0 * std::abs(f_landau[index]->GetParameter(2)));
+	      //ranges[LRLabel][index] -> push_back( 0 );
 	    }
 	    else
 	      ranges[LRLabel][index] -> push_back( minE[std::make_pair(iBar, Vov)] ); // 
@@ -689,6 +693,7 @@ int main(int argc, char** argv)
 	    
 	    //ranges[LRLabel][index] -> push_back( std::min(f_landau[index]->GetParameter(1)*2.0, 940.)); // tight selection around the MIP peak
 	    ranges[LRLabel][index] -> push_back( 940 ); // use the entire mip spectrum
+	    //ranges[LRLabel][index] -> push_back( 1000 ); // use the entire mip spectrum
 	    
 	    for(auto range: (*ranges[LRLabel][index])){
 	      TLine* line = new TLine(range,0.,range, histo->GetMaximum());
@@ -702,10 +707,13 @@ int main(int argc, char** argv)
 	  
 	  
 	  
-	  // -- draw and print energy plots 
+	  // -- draw and print energy plots
+	   
+	  histo->GetXaxis()->SetRangeUser(0,1024);
 	  latex -> Draw("same"); 
 	  outFile -> cd();
-	  histo->Write();     
+	  histo->Write();
+	  c -> Update();
 	  c -> Print(Form("%s/energy/c_energy__%s.png",plotDir.c_str(),label.c_str()));
 	  c -> Print(Form("%s/energy/c_energy__%s.pdf",plotDir.c_str(),label.c_str()));
 	  delete c;
@@ -765,7 +773,7 @@ int main(int argc, char** argv)
 	    {
 	      std::string labelLR_energyBin(Form("bar%02dL-R_Vov%.2f_th%02d_energyBin%02d",anEvent->barID,anEvent->Vov,anEvent->vth1,energyBinAverage));
 	      
-              h1_energyRatio[index2] = new TH1F(Form("h1_energyRatio_%s",labelLR_energyBin.c_str()),"",1000,0.,5.);
+          h1_energyRatio[index2] = new TH1F(Form("h1_energyRatio_%s",labelLR_energyBin.c_str()),"",1000,0.,5.);
 	      h1_totRatio[index2] = new TH1F(Form("h1_totRatio_%s",labelLR_energyBin.c_str()),"",2000,0.,5.);
 	      h1_t1fineMean[index2] = new TH1F(Form("h1_t1fineMean_%s",labelLR_energyBin.c_str()),"",1000,0.,1000.);
 	      h1_qT1Mean[index2] = new TH1F(Form("h1_qT1Mean_%s",labelLR_energyBin.c_str()),"",250,0.5,1.5);
