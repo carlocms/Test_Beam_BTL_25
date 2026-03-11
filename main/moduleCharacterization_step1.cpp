@@ -45,21 +45,22 @@ int main(int argc, char** argv)
   // - parse the config file
   CfgManager opts;
   opts.ParseConfigFile(argv[1]);
-  int debugMode = 0;
-  if( argc > 2 ) debugMode = atoi(argv[2]);
   
   // - open files and make the tree chain
   std::string inputDir = opts.GetOpt<std::string>("Input.inputDir");
   std::string fileBaseName = opts.GetOpt<std::string>("Input.fileBaseName");
   std::string runs = opts.GetOpt<std::string>("Input.runs");
   int maxEntries = opts.GetOpt<int>("Input.maxEntries");
-  int usePedestals = opts.GetOpt<int>("Input.usePedestals");
   std::string source = opts.GetOpt<std::string>("Input.sourceName");
   int useTrackInfo = opts.GetOpt<int>("Input.useTrackInfo");
   float my_step1 = opts.GetOpt<float>("Input.vov") ;
   int DUTasic = opts.GetOpt<int>("Channels.DUTasic");
   int REFasic = opts.GetOpt<int>("Channels.REFasic");
   std::string discCalibrationFile = opts.GetOpt<std::string>("Input.discCalibration");
+  // -- Note: the channels corresponding to the external reference bar are directly set in the cfg
+  int chL_ext = opts.GetOpt<float>("Coincidence.chL");
+  int chR_ext = opts.GetOpt<float>("Coincidence.chR");
+  std::vector<std::string> zombieFiles;
   TOFHIRThresholdZero thrZero(discCalibrationFile,1);
   int maxActiveBars = 3;
   TChain* tree = new TChain("data","data");
@@ -103,7 +104,20 @@ int main(int argc, char** argv)
 	// ---- check if Vov selected
 	bool addFile = true;
 	TFile *f = TFile::Open((directory_path+fname).c_str());
+	std::string fullPath = directory_path + fname;
+	if (!f || f->IsZombie()) {
+	  std::cerr << "[ERROR] Cannot open file: " << fullPath << std::endl;
+	  zombieFiles.push_back(fullPath);
+	  if(f) f->Close();
+	  continue;
+	}
 	TTree *tmpTree = f->Get<TTree>("data");
+	if (!tmpTree) {
+	  std::cerr << "[ERROR] TTree 'data' not found in file: " << fullPath << std::endl;
+	  zombieFiles.push_back(fullPath);
+	  f->Close();
+	  continue;
+	}
 	float step1;
 	tmpTree->SetBranchAddress("step1",&step1);
 	tmpTree->GetEntry(0);
@@ -232,9 +246,6 @@ int main(int argc, char** argv)
     {
       float energyL_ext;
       float energyR_ext;
-      // -- Note: the channels corresponding to bar 8 in the reference module are directly set in the cfg 
-      int chL_ext = opts.GetOpt<float>("Coincidence.chL");
-      int chR_ext = opts.GetOpt<float>("Coincidence.chR");      
       int nEntries = tree->GetEntries();
       if( maxEntries > 0 ) nEntries = maxEntries;
 
@@ -267,9 +278,6 @@ int main(int argc, char** argv)
 	
 	// --- remove showering and cross talk events
 	if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB")){
-	  auto it = std::find( channelMapping.begin(), channelMapping.end(), chL_ext);       	
-	  int thisBar = 0;
-	  if (it != channelMapping.end()) thisBar = int((it - channelMapping.begin()))/2;
 	  float energySumArray = 0.;
 	  int   nActiveBarsArray = 0;	  
 	  for(int iBar = 0; iBar < int(channelMapping.size())/2; ++iBar) {
@@ -374,8 +382,6 @@ int main(int argc, char** argv)
   long long timeR[16];
   unsigned short t1fineL[16]; 
   unsigned short t1fineR[16]; 
-  float qT1L[16]; 
-  float qT1R[16]; 
   float energyL[16];
   float energyR[16];
   int nEntries = tree->GetEntries();
@@ -603,7 +609,16 @@ int main(int argc, char** argv)
 	outTrees[index] -> Fill();
       }
   } // end loop over events
+
+  // summary of zombie files
+  if (!zombieFiles.empty()) {
+    std::cout << "\n=== ZOMBIE FILES ===" << std::endl;
+    for (const auto &f : zombieFiles) {
+      std::cout << f << std::endl;
+    }
+  }
   
+  // summary output sizes
   int bytes = outFile -> Write();
   std::cout << "============================================"  << std::endl;
   std::cout << "nr of  B written:  " << int(bytes)             << std::endl;
