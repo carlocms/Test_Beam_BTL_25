@@ -1,114 +1,122 @@
 #!/usr/bin/env python
-
-#--------> ex: python create_config.py -r 66448-66461 -t 12 -ov 1.5 -ml HPK_nonIrr_C25_LYSO813 -c config_23.00
-
-import os, re
-import commands
-import math, time
-import sys
+import shutil
+from pathlib import Path
 import argparse
-import subprocess
+import sys
+from channelMapping import *
 
-# ----
-#cfgFolder = '/afs/cern.ch/user/s/spalluot/MTD/TB_CERN_May23/Lab5015Analysis/cfg'
-cfgFolder = '/afs/cern.ch/work/m/malberti/MTD/TBatH8May2023/Lab5015Analysis/cfg/TOFHIR2X/'
-# ----
-
-
-parser = argparse.ArgumentParser(description='This script creates moduleCharacterization cfg and minEnergy')
-
-parser.add_argument("-ml",  "--modulelabel",     required=True,  type=str, help="module label")
-parser.add_argument("-r",  "--runs",             required=True,  type=str, help="comma-separated list of runs to be processed")
-parser.add_argument("-t",  "--temperature",      required=True,  type=str, help="temperature")
-parser.add_argument("-ov", "--Vov",              required=True,  type=str, help="overvoltage")
-parser.add_argument("-c",  "--config",           required=True,  type=str, help="config number")
-parser.add_argument("-e", "--extraLabel",        required=False, type=str, help="eg: angle or check or whatever")
-
+# parser
+# ----------------------------
+parser = argparse.ArgumentParser(description='This script creates moduleCharacterization , drawPulseShape, and minEnergy cfg')
+parser.add_argument("-ml", "--modulelabel", required=True, type=str, help="module label")
+parser.add_argument("-r", "--runs", required=True, type=str, help="comma-separated list of runs to be processed")
+parser.add_argument("-t", "--temperature", required=True, type=str, help="temperature")
+parser.add_argument("-ov", "--Vov", required=True, type=str, help="overvoltage")
+parser.add_argument("-c", "--config", required=True, type=str, help="config number")
+parser.add_argument("-th", "--threshold", required=True, type=str, help="threshold used for the scan")
+parser.add_argument("-vth1", "--thresholdT1", required=False, default="-1", type=str, help="specific threshold for T1")
+parser.add_argument("-vth2", "--thresholdT2", required=False, default="-1", type=str, help="specific threshold for T2")
+parser.add_argument("-vthe", "--thresholdE",  required=False, default="-1", type=str, help="specific threshold for E")
+parser.add_argument("-e", "--extraLabel", required=False,  type=str, help="eg: angle or check or whatever")
+parser.add_argument("--dutASIC", required=False, default=7, type=int, help="the DUT ASIC position (default set to 7)")
+parser.add_argument("--refASIC", required=False, default=4, type=int, help="the REF ASIC position (default set to 4)")
+parser.add_argument("--refBar",  required=False, type=int, help="the REF bar on which ask for coincidence (default set to 7 in the code)")
+parser.add_argument("--saveRefInfoFlag", required=False, type=int, default=0, help="0 or 1: flag to set if reference info should be saved")
 args = parser.parse_args()
 
-runs = args.runs
-
-if args.extraLabel:
-   label = '%s_Vov%.2f_%s_T%sC' %(args.modulelabel, float(args.Vov),args.extraLabel,  args.temperature)
+# -- changing the options on REF and DUT ASICs might not be necessary for all the studies
+# -   default values are set in the argparse
+if args.refBar is None:
+    args.refBar = 7
 else:
-   label = '%s_Vov%.2f_T%sC' %(args.modulelabel, float(args.Vov) , args.temperature)
+    # - if the reference bar is not the default one, add an extra label
+    if args.extraLabel:
+        args.extraLabel += "refBar"+str(args.refBar)
+    else:
+        args.extraLabel = "refBar"+str(args.refBar)
+chL = args.refASIC*32 + map_bar_LR[args.refBar][0]
+chR = args.refASIC*32 + map_bar_LR[args.refBar][1]
+print("channel left ", chL, "   channel right ", chR)
 
 
-#---- write min energy ---
+your_path = "/eos/home-s/spalluot/MTD/TB_CERN_Sep25/Lab5015Analysis/cfg/"
 
-temp_min = '%s/minEnergies_%s.txt'%(cfgFolder,args.modulelabel)
-if not (os.path.isfile(temp_min)):
-   baseMinEnergy = open('%s/minEnergies_base_TOFHIR2X.txt'%cfgFolder, 'r')
-   newMinEnergy  = open('%s/minEnergies_%s.txt'%(cfgFolder,args.modulelabel), 'w')
 
-   command = 'cp %s/minEnergies_base_TOFHIR2X.txt %s/minEnergies_%s.txt'%(cfgFolder, cfgFolder, args.modulelabel)
 
-   os.system(command)
-
-# --- write cfg ---- moduleChar
-baseCfg = open('%s/moduleCharacterization_base_TOFHIR2X.cfg'%cfgFolder, 'r')
-
+# config label
+# ----------------------------
+Vov_float = float(args.Vov)
+label = f"{args.modulelabel}_Vov{Vov_float:.2f}_T{args.temperature}C"
 if args.extraLabel:
-   newCfg = open('%s/moduleCharacterization_%s.cfg'%(cfgFolder,label), 'w')
-   print 'writing \t moduleCharacterization_%s.cfg'%(label)
-else:
-   newCfg = open('%s/moduleCharacterization_%s.cfg'%(cfgFolder,label), 'w')
-   print 'writing \t moduleCharacterization_%s.cfg'%(label)
+    label += f"_{args.extraLabel}"
 
-for line in baseCfg:
-   if (line.startswith('Vov') and args.Vov not in line):
-      print 'ERROR: missing ov in moduleCharacterization.cfg file'
-      newCfg.write(line + '%s \n'%args.Vov) # non funziona perche va a capo
-      sys.exit()
-   elif 'runNumbers' in line:
-      newCfg.write(line.replace('runNumbers', '%s'%runs))
-   elif 'generalLabel' in line:
-      newCfg.write(line.replace('generalLabel', '%s'%label))
-   elif 'moduleLabel' in line:
-      newCfg.write(line.replace('moduleLabel', '%s'%args.modulelabel))
-   elif 'confNumber' in line:
-      newCfg.write(line.replace('confNumber', '%s'%args.config))
-      print 'config : ', args.config
-   else:
-      newCfg.write(line)
+# path
+# ----------------------------
+cfgFolder = Path(your_path)
+temp_min = cfgFolder / f"minEnergies_{args.modulelabel}.txt"
 
 
-baseCfg.close()
-newCfg.close()
+# copy minEnergy file if it does not exist
+# ----------------------------
+if not temp_min.exists():
+    base_min = cfgFolder / "minEnergies_base.txt"
+    shutil.copy(base_min, temp_min)
+
+    
+# function to write config file
+# -------------------------------
+def write_cfg(base_path: Path, out_path: Path, replacements: dict, check_Vov: bool = False):
+    with open(base_path) as baseCfg, open(out_path, 'w') as newCfg:
+        for line in baseCfg:
+            original_line = line
+            if check_Vov and line.startswith('Vov') and args.Vov not in line:
+                print(f"ERROR: missing ov in {base_path.name} file")
+                sys.exit(1)
+
+            for key, val in replacements.items():
+                if key in line:
+                    line = line.replace(key, str(val))
+            newCfg.write(line)
 
 
+# ModuleCharacterization cfg
+# ----------------------------
+base_module_cfg = cfgFolder / "moduleCharacterization_base.cfg"
+out_module_cfg = cfgFolder / f"moduleCharacterization_{label}.cfg"
+print(f"writing \t {out_module_cfg.name}")
 
-# --- write cfg ---- pulseShape
-baseCfg = open('%s/drawPulseShapeTB_base_TOFHIR2X.cfg'%cfgFolder, 'r')
+# replace the words find in the cfg_base (key) with the item of this dict
+replacements_module = {
+    "runNumbers": args.runs,
+    "generalLabel": label,
+    "moduleLabel": args.modulelabel,
+    "confNumber": args.config,
+    "vovLabel": args.Vov,
+    "scanVth" : args.threshold,
+    "setVth1" : args.thresholdT1,
+    "setVth2" : args.thresholdT2,
+    "setVthe" : args.thresholdE,
+    "channelLeft" : chL,
+    "channelRight": chR,
+    "refASIC_ch" : args.refASIC,
+    "dutASIC_ch" : args.dutASIC,
+    "saveReferenceModuleInfoFlag" : args.saveRefInfoFlag
+}
 
-
-if args.extraLabel:
-   newCfg = open('%s/drawPulseShapeTB_%s.cfg'%(cfgFolder,label), 'w')
-   print 'writing \t drawPulseShapeTB_%s.cfg'%(label)
-else:
-   newCfg = open('%s/drawPulseShapeTB_%s.cfg'%(cfgFolder,label), 'w')
-   print 'writing \t drawPulseShapeTB_%s.cfg'%(label)
-
-
-for line in baseCfg:
-   if (line.startswith('Vov') and args.Vov not in line):
-      newCfg.write(line + '%s'%args.Vov)
-   elif 'runNumbers' in line:
-      newCfg.write(line.replace('runNumbers', '%s'%runs))
-   elif 'generalLabel' in line:
-      newCfg.write(line.replace('generalLabel', '%s'%label))
-   elif 'moduleLabel' in line:
-      newCfg.write(line.replace('moduleLabel', '%s'%args.modulelabel))
-   elif 'confNumber' in line:
-      newCfg.write(line.replace('confNumber', '%s'%args.config))
-      print 'config : ', args.config
-
-   else:
-      newCfg.write(line)
-
-baseCfg.close()
-newCfg.close()
+write_cfg(base_module_cfg, out_module_cfg, replacements_module, check_Vov=True)
+print(f"config : {args.config}")
 
 
+# drawPulseShapeTB.cpp needs few adjustments for the new structure with DUT and REF to consider asic 4 and 7, basically is only channel mapping, but it is not done yet
 
+# # drawPulseShapeTB cfg
+# # ----------------------------
+# base_pulse_cfg = cfgFolder / "drawPulseShapeTB_base.cfg"
+# out_pulse_cfg = cfgFolder / f"drawPulseShapeTB_{label}.cfg"
+# print(f"writing \t {out_pulse_cfg.name}")
 
+# replacements_pulse = {
+#     "runNumbers": args.runs,
+#     "generalLabel": label,
+#     "moduleLabel": args.modulelabel,
+#     "confNumber": args.config
