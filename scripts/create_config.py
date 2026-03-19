@@ -5,6 +5,12 @@ import argparse
 import sys
 from channelMapping import *
 
+# ------ MODIFY YOUR PATHS HERE -------
+Lab5015_path = "/eos/home-s/spalluot/MTD/TB_CERN_Sep25/Lab5015Analysis"
+plot_path = "/eos/home-s/spalluot/www/MTD/MTDTB_CERN_Sep25"
+# -------------------------------------
+
+
 # parser
 # ----------------------------
 parser = argparse.ArgumentParser(description='This script creates moduleCharacterization , drawPulseShape, and minEnergy cfg')
@@ -39,10 +45,6 @@ chR = args.refASIC*32 + map_bar_LR[args.refBar][1]
 print("channel left ", chL, "   channel right ", chR)
 
 
-your_path = "/eos/home-s/spalluot/MTD/TB_CERN_Sep25/Lab5015Analysis/cfg/"
-
-
-
 # config label
 # ----------------------------
 Vov_float = float(args.Vov)
@@ -52,7 +54,8 @@ if args.extraLabel:
 
 # path
 # ----------------------------
-cfgFolder = Path(your_path)
+cfg_path = f"{Lab5015_path}/cfg"
+cfgFolder = Path(cfg_path)
 temp_min = cfgFolder / f"minEnergies_{args.modulelabel}.txt"
 
 
@@ -87,6 +90,8 @@ print(f"writing \t {out_module_cfg.name}")
 
 # replace the words find in the cfg_base (key) with the item of this dict
 replacements_module = {
+    "Lab5015_repo_path": Lab5015_path,
+    "Plot_repo_path": plot_path,
     "runNumbers": args.runs,
     "generalLabel": label,
     "moduleLabel": args.modulelabel,
@@ -100,14 +105,15 @@ replacements_module = {
     "channelRight": chR,
     "refASIC_ch" : args.refASIC,
     "dutASIC_ch" : args.dutASIC,
-    "saveReferenceModuleInfoFlag" : args.saveRefInfoFlag
+    "saveReferenceModuleInfoFlag" : args.saveRefInfoFlag,
+    "channelMapping_list_from_bar0_to_bar15" : get_TOFHIR_channel_mapping()
 }
 
 write_cfg(base_module_cfg, out_module_cfg, replacements_module, check_Vov=True)
 print(f"config : {args.config}")
 
 
-# drawPulseShapeTB.cpp needs few adjustments for the new structure with DUT and REF to consider asic 4 and 7, basically is only channel mapping, but it is not done yet
+# drawPulseShapeTB.cpp needs few adjustments for the new structure with DUT and REF ASIC settings
 
 # # drawPulseShapeTB cfg
 # # ----------------------------
