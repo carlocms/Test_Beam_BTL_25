@@ -24,6 +24,7 @@ parser.add_argument("-vth1", "--thresholdT1", required=False, default="-1", type
 parser.add_argument("-vth2", "--thresholdT2", required=False, default="-1", type=str, help="specific threshold for T2")
 parser.add_argument("-vthe", "--thresholdE",  required=False, default="-1", type=str, help="specific threshold for E")
 parser.add_argument("-e", "--extraLabel", required=False,  type=str, help="eg: angle or check or whatever")
+parser.add_argument("--whichEnergyIntercalib", required=False,  default="", type=str, help="i.e. TOFHIR, TOFHIR_LO or empty for None")
 parser.add_argument("--dutASIC", required=False, default=7, type=int, help="the DUT ASIC position (default set to 7)")
 parser.add_argument("--refASIC", required=False, default=4, type=int, help="the REF ASIC position (default set to 4)")
 parser.add_argument("--refBar",  required=False, type=int, help="the REF bar on which ask for coincidence (default set to 7 in the code)")
@@ -44,13 +45,21 @@ chL = args.refASIC*32 + map_bar_LR[args.refBar][0]
 chR = args.refASIC*32 + map_bar_LR[args.refBar][1]
 print("channel left ", chL, "   channel right ", chR)
 
-
+# if calibration factors are to be included, add an extralabel
+if args.whichEnergyIntercalib != "":
+    args.extraLabel = f"{args.whichEnergyIntercalib}calib"
+    intercalib_path = f"Plot_repo_path/energy_intercalibration/baseGeneralLabel/whichCalibration_calibration_factors.csv"
+else:
+    intercalib_path = "0"
+    
 # config label
 # ----------------------------
 Vov_float = float(args.Vov)
-label = f"{args.modulelabel}_Vov{Vov_float:.2f}_T{args.temperature}C"
+base_label = f"{args.modulelabel}_Vov{Vov_float:.2f}_T{args.temperature}C"
 if args.extraLabel:
-    label += f"_{args.extraLabel}"
+    label = f"{base_label}_{args.extraLabel}"
+else:
+    label = base_label
 
 # path
 # ----------------------------
@@ -90,6 +99,7 @@ print(f"writing \t {out_module_cfg.name}")
 
 # replace the words find in the cfg_base (key) with the item of this dict
 replacements_module = {
+    "interCalibPath" : intercalib_path,
     "Lab5015_repo_path": Lab5015_path,
     "Plot_repo_path": plot_path,
     "runNumbers": args.runs,
@@ -106,7 +116,9 @@ replacements_module = {
     "refASIC_ch" : args.refASIC,
     "dutASIC_ch" : args.dutASIC,
     "saveReferenceModuleInfoFlag" : args.saveRefInfoFlag,
-    "channelMapping_list_from_bar0_to_bar15" : get_TOFHIR_channel_mapping()
+    "channelMapping_list_from_bar0_to_bar15" : get_TOFHIR_channel_mapping(),
+    "whichCalibration" : args.whichEnergyIntercalib,
+    "baseGeneralLabel" : base_label
 }
 
 write_cfg(base_module_cfg, out_module_cfg, replacements_module, check_Vov=True)

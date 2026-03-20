@@ -57,6 +57,7 @@ int main(int argc, char** argv)
   int DUTasic = opts.GetOpt<int>("Channels.DUTasic");
   int REFasic = opts.GetOpt<int>("Channels.REFasic");
   std::string discCalibrationFile = opts.GetOpt<std::string>("Input.discCalibration");
+  std::string interCalibrationFile = opts.GetOpt<std::string>("Input.interCalibration");
   // -- Note: the channels corresponding to the external reference bar are directly set in the cfg
   int chL_ext = opts.GetOpt<float>("Coincidence.chL");
   int chR_ext = opts.GetOpt<float>("Coincidence.chR");
@@ -65,6 +66,31 @@ int main(int argc, char** argv)
   int maxActiveBars = 3;
   TChain* tree = new TChain("data","data");
 
+  // - energy intercalibration map (if specified in the config)
+  std::map<std::tuple<int,std::string,int,int>, float> calibMap;
+  if (interCalibrationFile != "0"){
+    std::ifstream fin(interCalibrationFile);
+    std::string line;
+    getline(fin, line);
+    while (getline(fin, line)){
+      std::stringstream ss(line);
+      std::string token;
+      int bar, thr;
+      float vov;
+      float calib;
+      std::string side;
+      getline(ss, token, ','); bar = atoi(token.c_str());
+      getline(ss, token, ','); side = token;
+      getline(ss, token, ','); vov = atof(token.c_str());
+      getline(ss, token, ','); thr = atoi(token.c_str());
+      getline(ss, token, ','); calib = atof(token.c_str());
+      int vov_int = int(vov * 100 + 0.5);
+      calibMap[std::make_tuple(bar, side, vov_int, thr)] = calib;
+    }
+    std::cout << ">>> Loaded calibration file: " << interCalibrationFile << std::endl;
+    std::cout << "    Calibration entries loaded: " << calibMap.size() << std::endl;
+  }
+  
   // - determine run numbers
   std::stringstream ss(runs);
   std::string token;
@@ -444,6 +470,18 @@ int main(int argc, char** argv)
 	totR[iBar]=0.001*(*tot)[channelIdx[chR[iBar]]];
 	energyL[iBar]=(*energy)[channelIdx[chL[iBar]]];
 	energyR[iBar]=(*energy)[channelIdx[chR[iBar]]];
+	// --- if intercalibraion file specified in the config, apply corrections 
+	if (interCalibrationFile != "0")
+	  {
+	    int vov_int = int(Vov * 100 + 0.5);
+	    int thr_int = int(vth + 0.5);
+	    auto keyL = std::make_tuple(iBar, "L", vov_int, thr_int);
+	    auto keyR = std::make_tuple(iBar, "R", vov_int, thr_int);
+	    if (calibMap.count(keyL))
+	      energyL[iBar] *= calibMap[keyL];
+	    if (calibMap.count(keyR))
+	      energyR[iBar] *= calibMap[keyR];
+	  }
 	timeL[iBar]=(*time)[channelIdx[chL[iBar]]];
 	timeR[iBar]=(*time)[channelIdx[chR[iBar]]];
 	t1fineL[iBar]=(*t1fine)[channelIdx[chL[iBar]]];
