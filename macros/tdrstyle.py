@@ -1,4 +1,4 @@
-import ROOT as rt
+import ROOT
 
 def tdrGrid( gridOn):
   tdrStyle.SetPadGridX(gridOn)
@@ -8,27 +8,25 @@ def tdrGrid( gridOn):
 def fixOverlay(): gPad.RedrawAxis()
 
 def setTDRStyle():
-  tdrStyle =  rt.TStyle("tdrStyle","Style for P-TDR")
+  tdrStyle =  ROOT.TStyle("tdrStyle","Style for P-TDR")
 
-   #for the canvas:
+  # Canvas:
   tdrStyle.SetCanvasBorderMode(0)
-  tdrStyle.SetCanvasColor(rt.kWhite)
+  tdrStyle.SetCanvasColor(ROOT.kWhite)
   tdrStyle.SetCanvasDefH(600) #Height of canvas
   tdrStyle.SetCanvasDefW(600) #Width of canvas
   tdrStyle.SetCanvasDefX(0)   #POsition on screen
   tdrStyle.SetCanvasDefY(0)
-
-
   tdrStyle.SetPadBorderMode(0)
   #tdrStyle.SetPadBorderSize(Width_t size = 1)
-  tdrStyle.SetPadColor(rt.kWhite)
+  tdrStyle.SetPadColor(ROOT.kWhite)
   tdrStyle.SetPadGridX(False)
   tdrStyle.SetPadGridY(False)
   tdrStyle.SetGridColor(0)
   tdrStyle.SetGridStyle(3)
   tdrStyle.SetGridWidth(1)
 
-#For the frame:
+  # Frame:
   tdrStyle.SetFrameBorderMode(0)
   tdrStyle.SetFrameBorderSize(1)
   tdrStyle.SetFrameFillColor(0)
@@ -37,7 +35,7 @@ def setTDRStyle():
   tdrStyle.SetFrameLineStyle(1)
   tdrStyle.SetFrameLineWidth(1)
   
-#For the histo:
+  # Histo:
   #tdrStyle.SetHistFillColor(1)
   #tdrStyle.SetHistFillStyle(0)
   tdrStyle.SetHistLineColor(1)
@@ -46,28 +44,29 @@ def setTDRStyle():
   #tdrStyle.SetLegoInnerR(Float_t rad = 0.5)
   #tdrStyle.SetNumberContours(Int_t number = 20)
 
-  tdrStyle.SetEndErrorSize(0)
+  #tdrStyle.SetEndErrorSize(0)
   #tdrStyle.SetErrorMarker(20)
   #tdrStyle.SetErrorX(0.)
   
   tdrStyle.SetMarkerStyle(20)
+  tdrStyle.SetMarkerSize(1)
   
-#For the fit/function:
+  # Fit/function:
   tdrStyle.SetOptFit(1)
   tdrStyle.SetFitFormat("5.4g")
   tdrStyle.SetFuncColor(2)
   tdrStyle.SetFuncStyle(1)
   tdrStyle.SetFuncWidth(1)
 
-#For the date:
+  #For the date:
   tdrStyle.SetOptDate(0)
   # tdrStyle.SetDateX(Float_t x = 0.01)
   # tdrStyle.SetDateY(Float_t y = 0.01)
 
-# For the statistics box:
+  # Statistics box:
   tdrStyle.SetOptFile(0)
   tdrStyle.SetOptStat(0) # To display the mean and RMS:   SetOptStat("mr")
-  tdrStyle.SetStatColor(rt.kWhite)
+  tdrStyle.SetStatColor(ROOT.kWhite)
   tdrStyle.SetStatFont(42)
   tdrStyle.SetStatFontSize(0.025)
   tdrStyle.SetStatTextColor(1)
@@ -79,15 +78,14 @@ def setTDRStyle():
   # tdrStyle.SetStatX(Float_t x = 0)
   # tdrStyle.SetStatY(Float_t y = 0)
 
-# Margins:
+  # Margins:
   #tdrStyle.SetPadTopMargin(0.05)
   tdrStyle.SetPadTopMargin(0.1)
   tdrStyle.SetPadBottomMargin(0.12)
   tdrStyle.SetPadLeftMargin(0.13)
   tdrStyle.SetPadRightMargin(0.08)
 
-# For the Global title:
-
+  # Global title:
   tdrStyle.SetOptTitle(0)
   tdrStyle.SetTitleFont(42)
   tdrStyle.SetTitleColor(1)
@@ -101,8 +99,7 @@ def setTDRStyle():
   # tdrStyle.SetTitleStyle(Style_t style = 1001)
   # tdrStyle.SetTitleBorderSize(2)
 
-# For the axis titles:
-
+  # Axis titles:
   tdrStyle.SetTitleColor(1, "XYZ")
   tdrStyle.SetTitleFont(42, "XYZ")
   tdrStyle.SetTitleSize(0.06, "XYZ")
@@ -112,15 +109,13 @@ def setTDRStyle():
   tdrStyle.SetTitleYOffset(1.25)
   # tdrStyle.SetTitleOffset(1.1, "Y") # Another way to set the Offset
 
-# For the axis labels:
-
+  # Axis labels:
   tdrStyle.SetLabelColor(1, "XYZ")
   tdrStyle.SetLabelFont(42, "XYZ")
   tdrStyle.SetLabelOffset(0.007, "XYZ")
   tdrStyle.SetLabelSize(0.05, "XYZ")
 
-# For the axis:
-
+  # Axis:
   tdrStyle.SetAxisColor(1, "XYZ")
   tdrStyle.SetStripDecimals(True)
   tdrStyle.SetTickLength(0.03, "XYZ")
@@ -128,26 +123,23 @@ def setTDRStyle():
   tdrStyle.SetPadTickX(1)  # To get tick marks on the opposite side of the frame
   tdrStyle.SetPadTickY(1)
 
-# Change for log plots:
+  # Change for log plots:
   tdrStyle.SetOptLogx(0)
   tdrStyle.SetOptLogy(0)
   tdrStyle.SetOptLogz(0)
 
-# Postscript options:
+  # Postscript options:
   tdrStyle.SetPaperSize(20.,20.)
   # tdrStyle.SetLineScalePS(Float_t scale = 3)
   # tdrStyle.SetLineStyleString(Int_t i, const char* text)
   # tdrStyle.SetHeaderPS(const char* header)
   # tdrStyle.SetTitlePS(const char* pstitle)
-
   # tdrStyle.SetBarOffset(Float_t baroff = 0.5)
   # tdrStyle.SetBarWidth(Float_t barwidth = 0.5)
   # tdrStyle.SetPaintTextFormat(const char* format = "g")
   # tdrStyle.SetPalette(Int_t ncolors = 0, Int_t* colors = 0)
   # tdrStyle.SetTimeOffset(Double_t toffset)
   # tdrStyle.SetHistMinimumZero(kTRUE)
-
   tdrStyle.SetHatchesLineWidth(5)
   tdrStyle.SetHatchesSpacing(0.05)
-
   tdrStyle.cd()

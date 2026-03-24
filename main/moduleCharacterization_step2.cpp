@@ -150,7 +150,6 @@ void drawDeltaT(TCanvas *& c, TH1F *histo, TF1 *& fitFunc, std::string xaxis_lab
 int main(int argc, char** argv)
 {
   setTDRStyle();
-  float cpu[2]{0}, mem[2]={0}, vsz[2]={0}, rss[2]={0};
   gErrorIgnoreLevel = kError;
   typedef std::numeric_limits<double> dbl;
   std::cout.precision(dbl::max_digits10);
@@ -163,8 +162,6 @@ int main(int argc, char** argv)
   // - parse the config file
   CfgManager opts;
   opts.ParseConfigFile(argv[1]);
-  int debugMode = 0;
-  if( argc > 2 ) debugMode = atoi(argv[2]);
   
   // - get parameters
   std::string plotDir = opts.GetOpt<std::string>("Output.plotDir");
@@ -206,7 +203,7 @@ int main(int argc, char** argv)
   // - read minimum energy for each bar from the minEnergies config file
   std::string minEnergiesFileName = opts.GetOpt<std::string>("Cuts.minEnergiesFileName");
   std::map < std::pair<int, float>, float> minE;
-  std::cout << minEnergiesFileName << std::endl;
+  std::cout << "> Reading minimum energy from :" <<minEnergiesFileName << std::endl;
   if( minEnergiesFileName != "" )
     {
       std::ifstream minEnergiesFile;
@@ -562,7 +559,6 @@ int main(int argc, char** argv)
 	    }
 	    else
 	      ranges[LRLabel][index] -> push_back( minE[std::make_pair(iBar, Vov)] );
-	    if ( LRLabel=="L-R") std::cout << iBar << "  " << Vov  << "  " << ranges[LRLabel][index] ->at(0) <<std::endl;
 	    
 	    // ----- set the energy maximum value to maximum ADC 
 	    ranges[LRLabel][index] -> push_back( 940 );
@@ -1211,7 +1207,6 @@ int main(int argc, char** argv)
 	      double  index2( 10000000*iEnergyBin + index1 );
 	      if(!h1_deltaT_energyRatioPhaseCorr[index2]) continue;
 	      std::string labelLR_energyBin(Form("%s_energyBin%02d",labelLR.c_str(),iEnergyBin));
-	      std::cout << labelLR_energyBin.c_str()<<std::endl;
 	      
 	      // --- draw energyRatio and phase corr deltaT
 	      c = new TCanvas(Form("c_deltaT_energyRatioPhaseCorr_%s",labelLR_energyBin.c_str()),Form("c_deltaT_energyRatioPhaseCorr_%s",labelLR_energyBin.c_str()));
@@ -1447,7 +1442,6 @@ int main(int argc, char** argv)
 	    {
 	      double  index2( 10000000*iEnergyBin + index1 );
 	      std::string labelLR_energyBin(Form("%s_energyBin%02d",labelLR.c_str(),iEnergyBin));
-	      std::cout << labelLR_energyBin.c_str()<<std::endl;
 	      
 	      // --- draw deltaT energyRatio + totRatio + phase corr
 	      if ( !h1_deltaT_energyRatioCorr_totRatioCorr_phaseCorr[index2] ) continue;

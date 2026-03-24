@@ -175,7 +175,6 @@ int main(int argc, char** argv)
   for(unsigned int iBar = 0; iBar < channelMapping.size()/2; ++iBar){
       chL[iBar] = channelMapping[iBar*2+0]+32*DUTasic;
       chR[iBar] = channelMapping[iBar*2+1]+32*DUTasic;
-    std::cout << "Bar: " << iBar << "   chL: "<< chL[iBar] << "    chR: " <<chR[iBar] <<std::endl;
   }
   
   // - define branches
@@ -235,7 +234,6 @@ int main(int argc, char** argv)
       std::istringstream ss(line);
       ss >> bar >> ov >> value;
       minE[std::make_pair(bar,ov)] = value;
-      std::cout<< bar <<  "   " << ov << "  " << minE[std::make_pair(bar,ov)] <<std::endl;
     }
   }
   else{

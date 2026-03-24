@@ -2,15 +2,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 import os
+import csv
 
 plt.rcParams.update({'font.size': 24})
 
 def plot_LO_calibration(csv_file, outdir="/eos/home-s/spalluot/www/MTD/MTDTB_CERN_Sep25/energy_intercalibration/LO_calibrations/"):
+    """
+    Reads a CSV with LO calibrations per bar and generates a plot with one line per side
+    """
     df = pd.read_csv(csv_file)
+    # - Separate bars per side and sort by number 
     df_L = df[df['side'] == 'L'].sort_values('bar')
     df_R = df[df['side'] == 'R'].sort_values('bar')
     rms_L = df_L['calib'].std()
-    rms_R = df_R['calib'].std()    
+    rms_R = df_R['calib'].std()
+    # - Draw
     plt.figure(figsize=(12,10))
     plt.plot(df_L['bar'], df_L['calib'], marker='o', linestyle='-', label=f'L (RMS={rms_L:.3f})', color="red")
     plt.plot(df_R['bar'], df_R['calib'], marker='s', linestyle='-', label=f'R (RMS={rms_R:.3f})', color="blue")
@@ -27,7 +33,13 @@ def plot_LO_calibration(csv_file, outdir="/eos/home-s/spalluot/www/MTD/MTDTB_CER
     plt.close()
     print(f"Saved LO calibrations plot in: {output}")
 
+
 def plot_TOFHIR_calibration(csv_file):
+    """
+    Reads a CSV file with TOFHIR calibration factors and creates:
+      1. calib factor vs bar per vov and threshold
+      2. heatmaps of calibration vs threshold/bar
+    """
     calib_min = 0.5
     calib_max = 1.5
     csv_path = Path(csv_file)
@@ -75,7 +87,11 @@ def plot_TOFHIR_calibration(csv_file):
             plt.close()
     print(f"Saved TOFHIR calibrations plot in: {outdir}")
 
+
 def plot_TOFHIR_calibration_multi(csv_files):
+    """
+    Takes many CSV TOFHIR calib CSV files and draw them together vs bar
+    """
     dfs = []
     for f in csv_files:
         dfs.append(pd.read_csv(f))
@@ -106,18 +122,9 @@ def plot_TOFHIR_calibration_multi(csv_files):
 
 
 def get_rebin_factor(integral):
-    # if integral > 15000:
-    #     return 1
-    # elif integral > 5000:
-    #     return 2
-    # elif integral > 500:
-    #     return 4
-    # elif integral > 100:
-    #     return 8
-    # elif integral > 50:
-    #     return 16
-    # else:
-    #     return 32
+    """
+    Chooeses a rebin factor based on the signal integral
+    """
     if integral > 15000:
         return 1
     elif integral > 10000:
@@ -134,6 +141,9 @@ def get_rebin_factor(integral):
         return 64
     
 def read_min_energy(txt_file):
+    """
+    Function to read minimum energy values from the minEnergy file
+    """
     min_energy = {}
     with open(txt_file, "r") as f:
         for line in f:
