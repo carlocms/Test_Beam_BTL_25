@@ -2,6 +2,7 @@
 from utils import *
 ROOT.gStyle.SetOptStat(0)
 ROOT.gStyle.SetOptFit(0)
+ROOT.gErrorIgnoreLevel = ROOT.kWarning
 
 # -------------------------------------------------------
 # YOUR PATHS
@@ -44,11 +45,11 @@ min_energy_dict = read_min_energy(minEnergy_txt)
 # STEP 1: get LO calibration from csv 
 # -------------------------------------------------------
 if not os.path.exists(LO_csv):
-    print("LO csv file not found:", LO_csv)
+    print("[ERROR] LO csv file not found:", LO_csv)
     sys.exit(0)
 LO_df = pd.read_csv(LO_csv)
 calib_LO = LO_df.set_index(["bar","side"])["calib"].to_dict()
-print(f"LO calibration factors extracted")
+print(f"[INFO] LO calibration factors extracted")
 
 # -------------------------------------------------------
 # STEP 2: fit energy calibrated spectra with a Landau fit
@@ -57,6 +58,7 @@ print(f"LO calibration factors extracted")
 # -- apply LO calibration factors 
 h_energy_raw = {}
 h_energy = {}
+failed_keys = []
 bars, sides, Vovs, thresholds = set(), set(), set(), set()
 f = ROOT.TFile.Open(f"{inputdir}/moduleCharacterization_step1_{input_file}.root")
 for key_obj in f.GetListOfKeys():
@@ -74,6 +76,10 @@ for key_obj in f.GetListOfKeys():
     thresholds.add(thr)
     h = f.Get(name).Clone()
     h.SetDirectory(0)
+    if h.GetEntries()<10:
+        print(f"[WARNING] Less than 10 events in {name}")
+        failed_keys.append((bar, side, vov, thr))
+        continue
     h_energy_raw[(bar, side, vov, thr)] = h.Clone()
     h_energy_raw[(bar, side, vov, thr)].SetDirectory(0)
     h_calib = h.Clone()
@@ -83,7 +89,7 @@ for key_obj in f.GetListOfKeys():
     h_energy[(bar, side, vov, thr)] = h_calib
     h_energy[(bar, side, vov, thr)].SetDirectory(0)
 f.Close()
-print("Energy calibrated per LO variations")
+print("[INFO] Energy calibrated per LO variations")
 bars = sorted(bars)
 sides = sorted(sides)
 Vovs = sorted(Vovs)
@@ -94,8 +100,14 @@ mpv_l = {}
 # loop over energy histograms corrected for LO variations
 for key,h in h_energy.items():
     bar, side, vov, thr = key
+    if "L-R" == side:
+        continue
     h_clone = h.Clone()
     f_landau, result = fit_landau_langaus(h_clone, min_energy_dict[(bar,vov)], 850, landau_only=True)
+    if result is None:
+        print(f"[WARNING] Fit failed for {key}")
+        failed_keys.append(key)
+        continue
     mpv_l[key] = result["landau_mpv"]    
     # ------------------------------------------------------- 
     # optional : check fit
@@ -108,7 +120,15 @@ for key,h in h_energy.items():
         h_clone.Draw("hist")
         f_landau.SetLineColor(2)
         f_landau.Draw("same")
-        c.SaveAs(f"{outdir_check}/energy_fit_bar{bar}{side}_vov{vov}_th{thr}.png")
+        legend = ROOT.TLegend(0.55, 0.7, 0.92, 0.92)
+        legend.SetBorderSize(0)
+        legend.SetFillStyle(0)
+        legend.SetTextSize(0.045)
+        legend.SetTextFont(42)
+        legend_text = f"MPV = {mpv_l[key]:.2f}"
+        legend.AddEntry(f_landau, legend_text, "l")
+        legend.Draw("same")
+        c.SaveAs(f"{outdir_check}/energy_fit_bar{bar:02d}{side}_vov{vov:.2f}_th{thr:02d}.png")
         del c
     del f_landau
 
@@ -135,9 +155,16 @@ for vov in Vovs:
         for bar in bars:
             for side in ["L", "R"]:
                 key = (bar, side, vov, thr)
-                if key in mpv_l:
-                    calib_tofhir_only[key] = mean_mpv / mpv_l[key]
-                
+                if key in failed_keys:
+                    calib_tofhir_only[key] = 1.0
+                else:
+                    if key in mpv_l:
+                        calib_tofhir_only[key] = mean_mpv / mpv_l[key]
+                    else:
+                        print(f"[ERROR] Missing MPV for {key}")
+                        calib_tofhir_only[key] = 1.0
+                        failed_keys.append(key)
+
 # -- save tofhir calibration factors to csv file
 with open(TOFHIR_csv,"w",newline="") as f:
     writer = csv.writer(f)
@@ -145,7 +172,7 @@ with open(TOFHIR_csv,"w",newline="") as f:
     for key,val in calib_tofhir_only.items():
         bar, side, vov, thr = key
         writer.writerow([bar, side, vov, thr, val])
-print("TOFHIR only calib factors saved to ", TOFHIR_csv)
+print("[INFO] TOFHIR only calib factors saved to ", TOFHIR_csv)
 
 
 # -------------------------------------------------------
@@ -160,7 +187,10 @@ for key, val in calib_tofhir_only.items():
         continue
     if (bar, side) not in calib_LO:
         print("[ERROR] Missing ", bar, " -  ", side, " in LO calibration factors.")
-        sys.exit(0)    
+        sys.exit(0)
+    if key in failed_keys:
+        calib_tofhir_lo[key] = 1.0
+        continue
     calib_tofhir_lo[key] = val * calib_LO[(bar, side)]
 
 # -- save to csv
@@ -170,7 +200,7 @@ with open(TOFHIR_LO_csv, "w", newline="") as f:
     for key, val in calib_tofhir_lo.items():
         bar, side, vov, thr = key
         writer.writerow([bar, side, vov, thr, val])
-print("TOFHIR+LO calibration factors saved to ", TOFHIR_LO_csv)
+print("[INFO] TOFHIR+LO calibration factors saved to ", TOFHIR_LO_csv)
 
 # -------------------------------------------------------
 # optional : apply TOFHIR+LO calib and save to output file
@@ -185,7 +215,7 @@ if args.writeOutFile:
             h_calib = correct_histogram_x(h, p0=0, p1=calib_tofhir_lo[key], new_name=f"{h.GetName()}_TOFHIR_LOcalib")
         h_calib.Write()
     f_out.Close()
-    print("Calibrated energy spectra (TOFHIR+LO) saved in:", f_out.GetName())
+    print("[INFO] Calibrated energy spectra (TOFHIR+LO) saved in:", f_out.GetName())
 
 # -------------------------------------------------------
 # optional : draw TOFHIR calibrations
@@ -231,7 +261,7 @@ if args.drawComparison:
         h_tofcalib.Draw("hist same")
         h_tof_localib.Draw("hist same")
         
-        leg = ROOT.TLegend(0.6,0.7,0.88,0.88)
+        leg = ROOT.TLegend(0.55,0.7,0.92,0.92)
         leg.SetBorderSize(0)
         leg.SetFillStyle(0)
         leg.AddEntry(h_raw,"Raw","l")
@@ -239,7 +269,7 @@ if args.drawComparison:
         leg.AddEntry(h_tofcalib,"TOFHIR calib","l")
         leg.AddEntry(h_tof_localib,"TOFHIR+LO calib","l")
         leg.Draw()
-        c.SaveAs(f"{outdir_check}/energy_bar{bar}{side}_vov{vov}_th{thr}.png")
+        c.SaveAs(f"{outdir_check}/energy_bar{bar:02d}{side}_vov{vov:.2f}_th{thr:02d}.png")
         del c
 
 # -------------------------------------------------------
@@ -261,21 +291,13 @@ if args.drawMPVvsBar:
         h_clone = h.Clone()
         _,result = fit_landau_langaus(h_clone, min_energy_dict[(bar,vov)], 850, landau_only=True)
         mpv_raw[key] = result["landau_mpv"]
-
-        h_clone_tof = h.Clone()
-        h_tof_corr = correct_histogram_x(h_clone_tof, p0=0, p1=calib_tofhir_only[key])
-        _,result_tof = fit_landau_langaus(h_tof_corr, min_energy_dict[(bar,vov)], 850, landau_only=True)
-        mpv_tof[key] = result_tof["landau_mpv"]
-
-        h_clone_lo = h.Clone()
-        h_lo_corr = correct_histogram_x(h_clone_lo, p0=0, p1=calib_LO[(bar,side)])
-        _,result_lo = fit_landau_langaus(h_lo_corr, min_energy_dict[(bar,vov)], 850, landau_only=True)
-        mpv_lo[key] = result_lo["landau_mpv"]
-
-        h_clone_tof_lo = h.Clone()
-        h_tof_lo_corr = correct_histogram_x(h_clone_tof_lo, p0=0, p1=calib_tofhir_lo[key])
-        _,result_tof_lo = fit_landau_langaus(h_tof_lo_corr, min_energy_dict[(bar,vov)], 850, landau_only=True)
-        mpv_tof_lo[key] = result_tof_lo["landau_mpv"]
+        mpv_tof[key] = mpv_raw[key]*calib_tofhir_only[key]
+        mpv_lo[key] = mpv_raw[key]*calib_LO[(bar,side)]
+        mpv_tof_lo[key] = mpv_raw[key]*calib_tofhir_lo[key]
+        if side == "R" and thr==10:
+            print(f"\n ---- {key} ----")
+            print(f"integral: {h_clone.Integral()}")
+            print(f"Raw: {mpv_raw[key]:.0f} \t TOFHIR only {mpv_tof[key]:.0f} \t LO only {mpv_lo[key]:.0f} \t all {mpv_tof_lo[key]:.0f}")
         
     for vov in Vovs:
         for thr in thresholds:
@@ -288,7 +310,6 @@ if args.drawMPVvsBar:
                 for bar in bars:
                     key = (bar, side, vov, thr)
                     if key not in mpv_raw or key not in mpv_tof or key not in mpv_lo or key not in mpv_tof_lo:
-                        print("[WARNING] something brutto")
                         continue
                     g_raw.SetPoint(g_raw.GetN(), bar, mpv_raw[key])
                     g_tof.SetPoint(g_tof.GetN(), bar, mpv_tof[key])
@@ -317,7 +338,7 @@ if args.drawMPVvsBar:
                 g_tof.Draw("PL same")
                 g_tof_lo.Draw("PL same")
 
-                leg = ROOT.TLegend(0.6,0.7,0.88,0.88)
+                leg = ROOT.TLegend(0.55,0.7,0.92,0.92)
                 leg.SetBorderSize(0)
                 leg.SetFillStyle(0)
 
@@ -326,5 +347,12 @@ if args.drawMPVvsBar:
                 leg.AddEntry(g_lo,"LO calib","lp")
                 leg.AddEntry(g_tof_lo,"TOFHIR + LO calib","lp")
                 leg.Draw()
-                c.SaveAs(f"{outdir_mpv}/mpv_vs_bar_{side}_vov{vov}_th{thr}.png")
+                c.SaveAs(f"{outdir_mpv}/mpv_vs_bar_{side}_vov{vov:.2f}_th{thr:02d}.png")
                 del c
+
+
+if len(failed_keys)>1:
+    print("\n\n =============================\n ------- Failed keys --------- \n =============================\n")
+    for k in failed_keys:
+        print(f"   {k}")
+    print("\n ============================= \n")

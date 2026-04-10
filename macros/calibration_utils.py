@@ -125,11 +125,11 @@ def get_rebin_factor(integral):
     """
     Chooeses a rebin factor based on the signal integral
     """
-    if integral > 15000:
+    if integral > 23000:
         return 1
-    elif integral > 10000:
+    elif integral > 15000:
         return 2
-    elif integral > 6000:
+    elif integral > 8000:
         return 4
     elif integral > 4000:
         return 8

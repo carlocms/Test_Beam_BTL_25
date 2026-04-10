@@ -10,7 +10,7 @@ outdir  = '/eos/home-s/spalluot/www/MTD/MTDTB_CERN_Sep25/ModuleCharacterization/
 parser = argparse.ArgumentParser(description='Module characterization summary plots')
 parser.add_argument("-i",  "--inputLabels",   required=True, type=str, help="comma-separated list of input labels")
 parser.add_argument("-m",  "--resMode",       required=True, type=int, help="resolution mode: 2 - tDiff, 1 - tAve")
-parser.add_argument("-o",  "--outFolder",     required=True, type=str, help="out folder")
+parser.add_argument("-o",  "--outFolder",     required=False, type=str, help="out folder, default=inputLabel")
 parser.add_argument("-r",  "--refThreshold",  required=False, type=int, default=11,  help="reference threshold used for fixed threshold plot")
 parser.add_argument("--energySource",  required=False, type=str, default="TB",  help="Energy source, default=TB. Options: TB, Na22, Laser")
 parser.add_argument("-minEn",  "--minEnergyFile",  required=False, type=str, default=None,  help="name of the energy minima file, do not specify minEnergies_")
@@ -18,6 +18,17 @@ args = parser.parse_args()
 thRef = args.refThreshold
 source = args.energySource
 
+# - Create files list
+label_list = (args.inputLabels.split(','))
+print(" - Files list: label_list", label_list)
+
+if args.outFolder == None:
+    if len(label_list) == 1:
+        args.outFolder = args.inputLabels
+    else:
+        print("[ERROR] Many input labels, but output folder name not specified")
+        sys.exit(0)
+        
 print("Getting settings: ")
 # - Get energy minima from txt file
 if args.minEnergyFile:
@@ -40,9 +51,6 @@ tResMax = 100
 tResMaxTh = 100
 vovMax = 4.0
 
-# - Create files list
-label_list = (args.inputLabels.split(','))
-print(" - Files list: label_list", label_list)
 
 # - Resolution mode : 0 : /1;  1: /sqrt(2) if CTR, 2: /2 if TDiff
 kscale = 2.
@@ -308,12 +316,15 @@ for label in label_list:
                # Note: phaseCorr is hereby implicit in the name 
                h1_deltaT_totCorr    = inputFile.Get('h1_deltaT_totRatioPhaseCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d'%(bar, vov, thr, enBin))
                if not isinstance(h1_deltaT_totCorr, ROOT.TH1F):
-                   print(f"[WARNING] totRatioCorr for bar{bar} Vov {vov} threshold {thr} has something wrong ---- {h1_deltaT_totCorr}")
                    h1_deltaT_totCorr = None
                h1_deltaT_energyCorr = inputFile.Get('h1_deltaT_energyRatioPhaseCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d'%(bar, vov, thr, enBin))
+               if not isinstance(h1_deltaT_energyCorr, ROOT.TH1F):
+                   h1_deltaT_energyCorr = None
                h1_deltaT_energyCorr_totCorr = inputFile.Get('h1_deltaT_energyRatioCorr_totRatioCorr_phaseCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d'%(bar, vov, thr, enBin))
+               if not isinstance(h1_deltaT_energyCorr_totCorr, ROOT.TH1F):
+                   h1_deltaT_energyCorr_totCorr = None
 
-               # --- totRatio + phase corr
+                # --- totRatio + phase corr
                if (h1_deltaT_totCorr is None): continue
                if (h1_deltaT_totCorr.GetEntries() < 200 ): continue
                tRes_totCorr[enBin] = getTimeResolution(h1_deltaT_totCorr)

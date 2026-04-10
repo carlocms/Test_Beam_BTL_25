@@ -239,29 +239,42 @@ def fit_landau_langaus(h, emin, emax, landau_only=False):
     max_content = h.GetBinContent(max_bin)
     max_energy  = h.GetBinCenter(max_bin)
     f_landau = ROOT.TF1("f_landau", "[0]*TMath::Landau(x,[1],[2])", emin, emax)
+    f_landau.SetParLimits(1, 0, 900)
+    f_landau.SetParLimits(2, 0, 100)
     f_landau.SetParameters(max_content, max_energy, max_energy*0.15)
     h.Fit(f_landau, "QRS")
     mpv_landau = f_landau.GetParameter(1)
     w_landau = f_landau.GetParameter(2)
+    mpv_landau_err = f_landau.GetParError(1)
+    w_landau_err = f_landau.GetParError(2)    
     if landau_only:
         return f_landau, {
             "landau_mpv" : mpv_landau,
-            "landau_width" : w_landau
+            "landau_width" : w_landau,
+            "landau_mpv_err" : mpv_landau_err,
+            "landau_width_err" : w_landau_err
         }
     else:
-        f_lg = ROOT.TF1("f_lg", getattr(ROOT,"langaufun"), emin, emax, 4)
-        f_lg.SetParLimits(0, 0.7*w_landau, 1.3*w_landau)
+        #f_lg = ROOT.TF1("f_lg", getattr(ROOT,"langaufun"), emin, emax, 4)
+        f_lg = ROOT.TF1("f_lg", getattr(ROOT,"langaufun"), mpv_landau*0.8, mpv_landau*1.6, 4)
+        f_lg.SetParLimits(0, 0.5*w_landau, 1.5*w_landau)
         f_lg.SetParLimits(1, mpv_landau*0.5, mpv_landau*1.5)    # MPV
-        f_lg.SetParLimits(2, 0.5*integral, 20*integral)
+        f_lg.SetParLimits(2, 0.5*integral, 25*integral)
         f_lg.SetParLimits(3, 0.001*mpv_landau, 0.5*mpv_landau)   # Gaussian sigma
         f_lg.SetParameters(w_landau, mpv_landau, integral, 0.04*mpv_landau)
         h.Fit(f_lg, "QR")
         mpv_lang = f_lg.GetParameter(1)
         sigma    = f_lg.GetParameter(3)
+        mpv_lang_err = f_lg.GetParError(1)
+        sigma_err    = f_lg.GetParError(3)
         return f_landau, f_lg, {
             "landau_mpv" : mpv_landau,
             "landau_width" : w_landau,
+            "landau_mpv_err" : mpv_landau_err,
+            "landau_width_err" : w_landau_err,
             "langaus_width" : f_lg.GetParameter(0),
             "langaus_mpv": mpv_lang,
             "langaus_sigma": sigma,
+            "langaus_mpv_err": mpv_lang_err,
+            "langaus_sigma_err": sigma_err
         }
