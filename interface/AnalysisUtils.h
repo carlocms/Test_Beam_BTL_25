@@ -14,10 +14,7 @@
 
 #define PI 3.14159265359
 
-
-
 class EventClass : public TObject {
-
 public:
   std::string stepLabel;
   std::string ch1;
@@ -63,14 +60,11 @@ public:
   ClassDef(EventClass,1);
 };
 
-
-
 class ModuleEventClass : public TObject {
-
 public:
   int barID;
   float Vov;
-  int vth1;
+  int vth;
   float energyL;
   float energyR;
   float totL;
@@ -86,7 +80,6 @@ public:
   float y;
   ClassDef(ModuleEventClass,1);
 };
-
 
 struct Event
 {
@@ -130,19 +123,11 @@ struct Event
   float t1fine2R;
 };
 
-
-
 void TrackProcess(float* cpu, float* mem, float* vsz, float* rss);
-
 std::vector<std::string> GetTokens(const std::string& input, const char& sep);
-
 float DeltaEta(const float& eta1, const float& eta2);
 float DeltaPhi(const float& phi1, const float& phi2);
-float DeltaR(const float& eta1, const float& phi1,
-             const float& eta2, const float& phi2);
-
+float DeltaR(const float& eta1, const float& phi1, const float& eta2, const float& phi2);
 float FindXMaximum(TH1F* histo, const float& xMin, const float& xMax, const bool& checkDerivative = false);
-
 int FindBin(const float& val, const std::vector<float>* ranges);
-
 #endif

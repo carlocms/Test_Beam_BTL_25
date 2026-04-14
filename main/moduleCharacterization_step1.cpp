@@ -62,7 +62,7 @@ int main(int argc, char** argv)
   int chL_ext = opts.GetOpt<float>("Coincidence.chL");
   int chR_ext = opts.GetOpt<float>("Coincidence.chR");
   std::vector<std::string> zombieFiles;
-  TOFHIRThresholdZero thrZero(discCalibrationFile,1);
+  TOFHIRThresholdZero thrZero(discCalibrationFile,0);
   int maxActiveBars = 3;
   TChain* tree = new TChain("data","data");
 
@@ -151,7 +151,7 @@ int main(int argc, char** argv)
 	delete tmpTree;
 	f->Close();	
 	if (addFile){
-	  std::cout << ">>> step1 = " << step1 << " --> Adding file: " << fname.c_str()<< std::endl;
+	  std::cout << ">>> step1 = " << step1 << " --> Adding file: " << fname.c_str()<< "\r" << std::flush;
 	  tree->Add((directory_path+fname).c_str());
 	}
       } // end of loop on filenames
@@ -229,18 +229,22 @@ int main(int argc, char** argv)
     int bar;
     float ov;
     float value;
-    while ( minEnergiesFile.good() ){
-      getline(minEnergiesFile, line);
+    while (getline(minEnergiesFile, line)) {
+      if (line.empty()) continue;
       std::istringstream ss(line);
       ss >> bar >> ov >> value;
       minE[std::make_pair(bar,ov)] = value;
     }
+    for (unsigned int iBar = 0; iBar < channelMapping.size()/2; ++iBar) {
+      auto key = std::make_pair(iBar, my_step1);
+      if (minE.find(key) == minE.end()) {
+	std::cerr << "[WARNING] Missing values in minimum energy values file for bar  "<<iBar << "  Vov  " <<my_step1 <<" --> setting to default"<< std::endl;
+	minE[key] = map_energyMins[my_step1]; }
+    }
   }
   else{
     for(unsigned int iBar = 0; iBar < channelMapping.size()/2; ++iBar){
-      for(unsigned int ii = 0; ii < Vov.size(); ++ii){
-	minE[std::make_pair(iBar, Vov[ii])] = map_energyMins[Vov[ii]];
-      }
+      minE[std::make_pair(iBar, my_step1)] = map_energyMins[my_step1];
     }
   }
 
@@ -277,7 +281,7 @@ int main(int argc, char** argv)
       for(int entry = 0; entry < nEntries; ++entry){
 	tree -> GetEntry(entry);
 	acceptEvent[entry] = false;
-	if( entry%200000 == 0 ){
+	if( entry%500000 == 0 ){
 	  std::cout << "\n>>> external bar loop: reading entry " << entry << " / " << nEntries << " (" << 100.*entry/nEntries << "%)" << std::endl;
 	  TrackProcess(cpu, mem, vsz, rss);
 	}
@@ -285,11 +289,11 @@ int main(int argc, char** argv)
 	// --- Decode TOFHIR thresholds from the step2 value
 	//     - step2 encodes 3 thresh values
 	//     - step2 = 10000*(vth1+1) + 100*(vth2+1) + (vthE+1)
-        float vth1 = float(int(step2/10000)-1);
+	float vth1 = float(int(step2/10000)-1);
         float vth2 = float(int((step2-10000*(vth1+1))/100.)-1);
         float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
         float vth = 0.;
-	if( entry%20000 == 0 ){
+	if( entry%500000 == 0 ){
 	  std::cout << step2 << " ith1: " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
 	}
 	if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
@@ -339,7 +343,7 @@ int main(int argc, char** argv)
 	}
 	acceptEvent[entry] = true;
 	h1_energyLR_ext[index] -> Fill(0.5*(energyL_ext + energyR_ext));
-      }
+      } // -- end loop over entries for external bar 
       std::cout << std::endl;
 
       // -- analysis for Na22 source
@@ -358,16 +362,8 @@ int main(int argc, char** argv)
 	for( auto index : h1_energyLR_ext){
 	  // --- rangesLR is a map having the index encoding thresholds as key and the energy ranges as items
 	  rangesLR[index.first] = new std::vector<float>;
-
-	  // --- same encoding as above
 	  float Vov = float ((int(index.first /10000))/100.);
-	  float vth1 = float(int((index.first-Vov*10000*100)/100.));
-	  float vth2 = float(int((step2-10000*(vth1+1))/100.)-1);
-          float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
-          float vth = 0;       
-	  if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
-          if(!opts.GetOpt<std::string>("Input.vth").compare("vth2"))  { vth = vth2;}
-	  if(!opts.GetOpt<std::string>("Input.vth").compare("vthE"))  { vth = vthE;}
+	  float vth = float(int((index.first-Vov*10000*100)/100.));
 
 	  // --- define energy ranges 
 	  // FIXME: is it worth it to use minE ?
@@ -376,7 +372,7 @@ int main(int argc, char** argv)
 	  index.second->GetXaxis()->SetRangeUser(0,1024);
 
 	  // --- fit the energy spectrum with a Landau function
-	  TF1* f_pre = new TF1(Form("fit_energy_coincBar_Vov%.2f_vth1_%02.0f",Vov,vth), "[0]*TMath::Landau(x,[1],[2])", 0, 1000.);
+	  TF1* f_pre = new TF1(Form("fit_energy_coincBar_Vov%.2f_vth_%02.0f",Vov,vth), "[0]*TMath::Landau(x,[1],[2])", 0, 1000.);
 	  f_pre -> SetRange(max*0.70, max*1.5);
 	  f_pre -> SetLineColor(kBlack);
           f_pre -> SetLineWidth(2);
@@ -389,7 +385,7 @@ int main(int argc, char** argv)
 	  else
 	    rangesLR[index.first] -> push_back( 20 );
 	  rangesLR[index.first] -> push_back( 950 );	  
-	  std::cout << "Vov = " << Vov << "  vth1 = " << vth1 << "   vth2 = " << vth2 
+	  std::cout << "Vov = " << Vov << "  vth = " << vth 
 		    << "    Coincidence bar - energy range:  " << rangesLR[index.first]->at(0) << " - " << rangesLR[index.first]->at(1)<< std::endl;
 	}
       }
@@ -414,7 +410,7 @@ int main(int argc, char** argv)
   // - loop over entries
   for(int entry = 0; entry < nEntries; ++entry) {
     tree -> GetEntry(entry);
-    if( entry%200000 == 0 )
+    if( entry%500000 == 0 )
       {
 	std::cout << "\n>>> 1st loop: reading entry " << entry << " / " << nEntries << " (" << 100.*entry/nEntries << "%)" << std::endl;
 	TrackProcess(cpu, mem, vsz, rss);
@@ -426,14 +422,14 @@ int main(int argc, char** argv)
     // -- decode step2 values
     float Vov = step1;
     float vth1 = float(int(step2/10000)-1);
-    float vth2 = int((step2-10000*(vth1+1))/100.)-1;
+    float vth2 = float(int((step2-10000*(vth1+1))/100.)-1);
     float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
     float vth = 0;
     std::string vthMode = opts.GetOpt<std::string>("Input.vth");
     if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
     if(!opts.GetOpt<std::string>("Input.vth").compare("vth2"))  { vth = vth2;}
     if(!opts.GetOpt<std::string>("Input.vth").compare("vthE"))  { vth = vthE;}
-    if( entry%20000 == 0 ){
+    if( entry%500000 == 0 ){
       std::cout << step2 << " ith1: " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
     }
     
@@ -577,7 +573,7 @@ int main(int argc, char** argv)
 	    h1_energyLR[index] -> Fill(0.5*(energyL[iBar]+energyR[iBar]));
 	    anEvent.barID = iBar;
 	    anEvent.Vov = Vov;
-	    anEvent.vth1 = vth;
+	    anEvent.vth = vth;
 	    anEvent.energyL = energyL[iBar];
 	    anEvent.energyR = energyR[iBar];
 	    anEvent.totL = totL[iBar];
@@ -623,7 +619,7 @@ int main(int argc, char** argv)
 	h1_energyLR[index] -> Fill(0.5*(energyL[maxBar]+energyR[maxBar]));
 	anEvent.barID = maxBar;
 	anEvent.Vov = Vov;
-	anEvent.vth1 = vth;
+	anEvent.vth = vth;
 	anEvent.energyL = energyL[maxBar];
 	anEvent.energyR = energyR[maxBar];
 	anEvent.totL = totL[maxBar];
