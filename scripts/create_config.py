@@ -29,6 +29,7 @@ parser.add_argument("--dutASIC", required=False, default=7, type=int, help="the 
 parser.add_argument("--refASIC", required=False, default=4, type=int, help="the REF ASIC position (default set to 4)")
 parser.add_argument("--refBar",  required=False, type=int, help="the REF bar on which ask for coincidence (default set to 7 in the code)")
 parser.add_argument("--saveRefInfoFlag", required=False, type=int, default=0, help="0 or 1: flag to set if reference info should be saved")
+parser.add_argument("--refCalibPath",    required=False, type=str, default="DM_348_Vov3.00_T18C", help="REF module label used to get the energy intercalibration factors (default: DM_348_Vov3.00_T18C)")
 args = parser.parse_args()
 
 # -- changing the options on REF and DUT ASICs might not be necessary for all the studies
@@ -51,9 +52,11 @@ if args.whichEnergyIntercalib != "":
         args.extraLabel = f"{args.whichEnergyIntercalib}calib"
     else:
         args.extraLabel += f"_{args.whichEnergyIntercalib}calib"
-    intercalib_path = f"Plot_repo_path/energy_intercalibration/baseGeneralLabel/whichCalibration_calibration_factors.csv"
+    intercalib_path = "Plot_repo_path/energy_intercalibration/baseGeneralLabel/whichCalibration_calibration_factors.csv"
+    intercalib_path_ref = f"Plot_repo_path/energy_intercalibration/{args.refCalibPath}/whichCalibration_calibration_factors.csv"
 else:
     intercalib_path = "0"
+    intercalib_path_ref = "0"
 
     
 # config label
@@ -105,6 +108,7 @@ print(f"-- Writing \t{out_module_cfg.name}")
 # replace the words find in the cfg_base (key) with the item of this dict
 replacements_module = {
     "interCalibPath" : intercalib_path,
+    "interCalibPath_ref" : intercalib_path_ref,
     "Lab5015_repo_path": Lab5015_path,
     "Plot_repo_path": plot_path,
     "runNumbers": args.runs,

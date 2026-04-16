@@ -53,42 +53,46 @@ int main(int argc, char** argv)
   int maxEntries = opts.GetOpt<int>("Input.maxEntries");
   std::string source = opts.GetOpt<std::string>("Input.sourceName");
   int useTrackInfo = opts.GetOpt<int>("Input.useTrackInfo");
+  int saveRefInfo = opts.GetOpt<int>("Input.saveRefInfo");
   float my_step1 = opts.GetOpt<float>("Input.vov") ;
   int DUTasic = opts.GetOpt<int>("Channels.DUTasic");
   int REFasic = opts.GetOpt<int>("Channels.REFasic");
   std::string discCalibrationFile = opts.GetOpt<std::string>("Input.discCalibration");
   std::string interCalibrationFile = opts.GetOpt<std::string>("Input.interCalibration");
-  // -- Note: the channels corresponding to the external reference bar are directly set in the cfg
+  std::string interCalibrationFile_ref = opts.GetOpt<std::string>("Input.interCalibration_ref");
+  std::vector<unsigned int> channelMapping = opts.GetOpt<std::vector<unsigned int> >("Channels.channelMapping");
+  // - Note: the channels corresponding to the external reference bar are directly set in the cfg. The coincidence is required only if it is specified in the cfg
   int chL_ext = opts.GetOpt<float>("Coincidence.chL");
   int chR_ext = opts.GetOpt<float>("Coincidence.chR");
+  // - cross check that channelMapping is behaving as expected and get reference bar
+  std::string sideL_ext;
+  std::string sideR_ext;
+  // - Note: the current logic is valid for reference module coincidence requirement, it may vary for other conditions (e.g. lab ref on one channel)
+  int barL_ext = findBarAndSide(chL_ext, REFasic, channelMapping, sideL_ext);
+  int barR_ext = findBarAndSide(chR_ext, REFasic, channelMapping, sideR_ext);
+  std::cout<<"[INFO] Coincidence required on channels corresponding to bar "<<barL_ext <<std::endl;
+  if (sideL_ext != "L" || sideR_ext != "R" || barL_ext != barR_ext){
+    std::cout <<"[ERROR] channelMapping has something wrong "<<std::endl;
+    return 1;
+  }
+  // - [WARNING]: hard-coded, but always valid for Sep25 TB
+  float Vov_ext = 3.0;
+  float th_ext = 10.0;
+  
   std::vector<std::string> zombieFiles;
   TOFHIRThresholdZero thrZero(discCalibrationFile,0);
   int maxActiveBars = 3;
   TChain* tree = new TChain("data","data");
 
-  // - energy intercalibration map (if specified in the config)
+  // - energy intercalibration map (if specified in the config) for the DUT module
   std::map<std::tuple<int,std::string,int,int>, float> calibMap;
-  if (interCalibrationFile != "0"){
-    std::ifstream fin(interCalibrationFile);
-    std::string line;
-    getline(fin, line);
-    while (getline(fin, line)){
-      std::stringstream ss(line);
-      std::string token;
-      int bar, thr;
-      float vov;
-      float calib;
-      std::string side;
-      getline(ss, token, ','); bar = atoi(token.c_str());
-      getline(ss, token, ','); side = token;
-      getline(ss, token, ','); vov = atof(token.c_str());
-      getline(ss, token, ','); thr = atoi(token.c_str());
-      getline(ss, token, ','); calib = atof(token.c_str());
-      int vov_int = int(vov * 100 + 0.5);
-      calibMap[std::make_tuple(bar, side, vov_int, thr)] = calib;
-    }
-    std::cout << ">>> Loaded calibration file: " << interCalibrationFile << std::endl;
-    std::cout << "    Calibration entries loaded: " << calibMap.size() << std::endl;
+  if (interCalibrationFile != "0") {
+    calibMap = loadCalibrationMap(interCalibrationFile);
+  }
+  // - energy intercalibration map for the REF module
+  std::map<std::tuple<int,std::string,int,int>, float> calibMap_ref;
+  if (interCalibrationFile_ref != "0" && saveRefInfo == 1) {
+    calibMap_ref = loadCalibrationMap(interCalibrationFile_ref);
   }
   
   // - determine run numbers
@@ -169,7 +173,6 @@ int main(int argc, char** argv)
   } // end of loop on token lines
 
   // - define channels (read mapping from the configuration file)
-  std::vector<unsigned int> channelMapping = opts.GetOpt<std::vector<unsigned int> >("Channels.channelMapping");
   int chL[16];
   int chR[16];
   for(unsigned int iBar = 0; iBar < channelMapping.size()/2; ++iBar){
@@ -247,7 +250,7 @@ int main(int argc, char** argv)
       minE[std::make_pair(iBar, my_step1)] = map_energyMins[my_step1];
     }
   }
-
+  
   // - define histograms
   std::string outFileName = opts.GetOpt<std::string>("Output.outFileNameStep1");
   TFile* outFile = TFile::Open(Form("%s",outFileName.c_str()),"RECREATE");
@@ -289,7 +292,7 @@ int main(int argc, char** argv)
 	// --- Decode TOFHIR thresholds from the step2 value
 	//     - step2 encodes 3 thresh values
 	//     - step2 = 10000*(vth1+1) + 100*(vth2+1) + (vthE+1)
-	float vth1 = float(int(step2/10000)-1);
+        float vth1 = float(int(step2/10000)-1);
         float vth2 = float(int((step2-10000*(vth1+1))/100.)-1);
         float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
         float vth = 0.;
@@ -323,10 +326,15 @@ int main(int argc, char** argv)
 	      }
 	    }
 	  }
-	  if (nActiveBarsArray > 3 ) continue;
-	}	
+	  if (nActiveBarsArray > maxActiveBars ) continue;
+	}
 	energyL_ext = (*energy)[channelIdx[chL_ext]];
 	energyR_ext = (*energy)[channelIdx[chR_ext]];
+	if (interCalibrationFile_ref != "0")
+	  {
+	    applyCalibration(energyL_ext, barL_ext, "L", Vov_ext, th_ext, calibMap_ref);
+	    applyCalibration(energyR_ext, barR_ext, "R", Vov_ext, th_ext, calibMap_ref);
+	  }
 
 	// --- encode conf parameters into an index
 	//     - Vov scaled by 100 and stored in the 10^4 position
@@ -343,7 +351,7 @@ int main(int argc, char** argv)
 	}
 	acceptEvent[entry] = true;
 	h1_energyLR_ext[index] -> Fill(0.5*(energyL_ext + energyR_ext));
-      } // -- end loop over entries for external bar 
+      }
       std::cout << std::endl;
 
       // -- analysis for Na22 source
@@ -362,6 +370,8 @@ int main(int argc, char** argv)
 	for( auto index : h1_energyLR_ext){
 	  // --- rangesLR is a map having the index encoding thresholds as key and the energy ranges as items
 	  rangesLR[index.first] = new std::vector<float>;
+
+	  // --- same encoding as above
 	  float Vov = float ((int(index.first /10000))/100.);
 	  float vth = float(int((index.first-Vov*10000*100)/100.));
 
@@ -385,7 +395,7 @@ int main(int argc, char** argv)
 	  else
 	    rangesLR[index.first] -> push_back( 20 );
 	  rangesLR[index.first] -> push_back( 950 );	  
-	  std::cout << "Vov = " << Vov << "  vth = " << vth 
+	  std::cout << "Vov = " << Vov << "  vth = " << vth
 		    << "    Coincidence bar - energy range:  " << rangesLR[index.first]->at(0) << " - " << rangesLR[index.first]->at(1)<< std::endl;
 	}
       }
@@ -393,17 +403,32 @@ int main(int argc, char** argv)
 
   // ------------------------
   // - 1st loop over events  
-  ModuleEventClass anEvent;  
+  ModuleEventWithRefClass anEvent;
+
+  // - reference module info (stored only if saveRefInfo 1 in config)
+  unsigned short qfineL_ref = -10;
+  unsigned short qfineR_ref = -10;
+  float totL_ref = -10;
+  float totR_ref = -10;
+  long long timeL_ref = -10;
+  long long timeR_ref = -10;
+  unsigned short t1fineL_ref = -10;
+  unsigned short t1fineR_ref = -10; 
+  float energyL_ref = -10;
+  float energyR_ref = -10;
+
+  // - module under test info
   unsigned short qfineL[16];
   unsigned short qfineR[16];    
   float totL[16];
   float totR[16];
   long long timeL[16];
   long long timeR[16];
-  unsigned short t1fineL[16]; 
+  unsigned short t1fineL[16];
   unsigned short t1fineR[16]; 
   float energyL[16];
   float energyR[16];
+
   int nEntries = tree->GetEntries();
   if( maxEntries > 0 ) nEntries = maxEntries;
 
@@ -440,10 +465,13 @@ int main(int argc, char** argv)
     if(!opts.GetOpt<std::string>("Coincidence.status").compare("yes"))
       {
 	if(!acceptEvent[entry] ) continue;	
-	int chL_ext = opts.GetOpt<int>("Coincidence.chL");
-	int chR_ext = opts.GetOpt<int>("Coincidence.chR");
 	float energyL_ext = (*energy)[channelIdx[chL_ext]];
 	float energyR_ext = (*energy)[channelIdx[chR_ext]];
+	if (interCalibrationFile_ref != "0")
+	  {
+	    applyCalibration(energyL_ext, barL_ext, "L", Vov_ext, th_ext, calibMap_ref);
+	    applyCalibration(energyR_ext, barR_ext, "R", Vov_ext, th_ext, calibMap_ref);
+	  }	
 	int label = (10000*int(Vov*100.)) + (100*vth) + 99;
 	int eBin = opts.GetOpt<int>("Coincidence.peak511eBin");
 	float avEn = 0.5 * ( energyL_ext + energyR_ext);
@@ -464,22 +492,38 @@ int main(int argc, char** argv)
 	totR[iBar]=0.001*(*tot)[channelIdx[chR[iBar]]];
 	energyL[iBar]=(*energy)[channelIdx[chL[iBar]]];
 	energyR[iBar]=(*energy)[channelIdx[chR[iBar]]];
-	// --- if intercalibraion file specified in the config, apply corrections 
+	
+	// --- if intercalibraion file specified in the config, apply corrections to the DUT energies
 	if (interCalibrationFile != "0")
 	  {
-	    int vov_int = int(Vov * 100 + 0.5);
-	    int thr_int = int(vth + 0.5);
-	    auto keyL = std::make_tuple(iBar, "L", vov_int, thr_int);
-	    auto keyR = std::make_tuple(iBar, "R", vov_int, thr_int);
-	    if (calibMap.count(keyL))
-	      energyL[iBar] *= calibMap[keyL];
-	    if (calibMap.count(keyR))
-	      energyR[iBar] *= calibMap[keyR];
+	    applyCalibration(energyL[iBar], iBar, "L", Vov, vth, calibMap);
+	    applyCalibration(energyR[iBar], iBar, "R", Vov, vth, calibMap);
 	  }
 	timeL[iBar]=(*time)[channelIdx[chL[iBar]]];
 	timeR[iBar]=(*time)[channelIdx[chR[iBar]]];
 	t1fineL[iBar]=(*t1fine)[channelIdx[chL[iBar]]];
 	t1fineR[iBar]=(*t1fine)[channelIdx[chR[iBar]]];
+	if (saveRefInfo)
+	  {
+	    qfineL_ref=(*qfine)[channelIdx[chL_ext]];
+	    qfineR_ref=(*qfine)[channelIdx[chR_ext]];
+	    totL_ref=0.001*(*tot)[channelIdx[chL_ext]];
+	    totR_ref=0.001*(*tot)[channelIdx[chR_ext]];
+	    energyL_ref=(*energy)[channelIdx[chL_ext]];
+	    energyR_ref=(*energy)[channelIdx[chR_ext]];
+
+	    // --- if intercalibraion file specified in the config, apply corrections to the REF energies
+	    if (interCalibrationFile_ref != "0")
+	      {
+		applyCalibration(energyL_ref, barL_ext, "L", Vov_ext, th_ext, calibMap_ref);
+		applyCalibration(energyR_ref, barR_ext, "R", Vov_ext, th_ext, calibMap_ref);
+	      }
+	    
+	    timeL_ref=(*time)[channelIdx[chL_ext]];
+	    timeR_ref=(*time)[channelIdx[chR_ext]];
+	    t1fineL_ref=(*t1fine)[channelIdx[chL_ext]];
+	    t1fineR_ref=(*t1fine)[channelIdx[chR_ext]];
+	  }
 	}
       else
 	{
@@ -502,7 +546,7 @@ int main(int argc, char** argv)
     int nActiveBarsArray = 0;
     int nBarsVeto[16];
 
-    // -- 
+    // -- determine DUT active bars
     for(unsigned int iBar = 0; iBar < channelMapping.size()/2; ++iBar) {
       nBarsVeto[iBar] = 0;
       if (totL[iBar]>-10 && totR[iBar]>-10 && totL[iBar]<100 && totR[iBar]<100) {
@@ -512,7 +556,7 @@ int main(int argc, char** argv)
 	  nActiveBarsArray+=1;
 	}	    
 
-	// --- check energy in adjacent bars
+	// --- check energy in adjacent bars -----> this is currently unused but might be useful for specific studies
 	for (int jBar = int(iBar) - 2; jBar < int(iBar) + 3; ++jBar){
 	  if (jBar == int(iBar)) continue;
 	  if (jBar < 0 || jBar > 15 ) continue;
@@ -523,7 +567,6 @@ int main(int argc, char** argv)
 	    nBarsVeto[iBar]+=1;
 	  }
 	}
-
 	// --- find bar having maximum average energy LR
 	if(energyMean>maxEn){
 	  maxEn = energyMean;
@@ -582,6 +625,18 @@ int main(int argc, char** argv)
 	    anEvent.timeR = timeR[iBar];
 	    anEvent.t1fineL = t1fineL[iBar];
 	    anEvent.t1fineR = t1fineR[iBar];
+
+	    if(saveRefInfo)
+	      {
+		anEvent.energyL_ref = energyL_ref;
+		anEvent.energyR_ref = energyR_ref;
+		anEvent.totL_ref = totL_ref;
+		anEvent.totR_ref = totR_ref;
+		anEvent.timeL_ref = timeL_ref;
+		anEvent.timeR_ref = timeR_ref;
+		anEvent.t1fineL_ref = t1fineL_ref;
+		anEvent.t1fineR_ref = t1fineR_ref;
+	      }
 	    if(useTrackInfo){
 	      anEvent.nhits = nhits;
 	      anEvent.x = x;
@@ -596,7 +651,6 @@ int main(int argc, char** argv)
 	  }	  
       }
     } // end loop over bars
-    
     // -- for Na22 or Laser analysis use only the bar with max energy to remove cross-talk between adjacent bars
     if( !opts.GetOpt<std::string>("Input.sourceName").compare("Na22") ||
 	!opts.GetOpt<std::string>("Input.sourceName").compare("Na22SingleBar") ||
@@ -650,6 +704,7 @@ int main(int argc, char** argv)
     }
   }
   
+  std::cout <<"[WARNING] REF module calibrations are hard-coded to take Vov 3V and threshold 10. In Sep25 TB no other configurations were acquired. It's not valid in general but ok" <<std::endl ;
   // summary output sizes
   int bytes = outFile -> Write();
   std::cout << "============================================"  << std::endl;

@@ -35,115 +35,6 @@
 #include "TSpectrum.h"
 
 
-// this is currently not used in the analysis (minE is set manually in the config, allowing to use a simple landau fit of the MIP peak)
-Double_t langaufun(Double_t *x, Double_t *par)
-{  
-  // --------------------
-  //  Numerical convolution of a Landau energy-loss distribution with a Gaussian resolution function.
-  //  Used to fit energy spectra including detector smearing effects.
-  //  Fit parameters:
-  //  - par[0] = Width (scale) parameter of Landau density
-  //  - par[1] = Most Probable (MP, location) parameter of Landau density
-  //  - par[2] = Total area (integral -inf to inf, normalization constant)
-  //  - par[3] = Width (sigma) of convoluted Gaussian function
-  //  In the Landau distribution (represented by the CERNLIB approximation),
-  //   the maximum is located at x=-0.22278298 with the location parameter=0.
-  //  This shift is corrected within this function, so that the actual
-  //   maximum is identical to the MP parameter.
-  // --------------------
-  
-  // constants
-  Double_t invsq2pi = 0.3989422804014;   // (2 pi)^(-1/2)
-  Double_t mpshift  = -0.22278298;       // Landau maximum location  
-  Double_t np = 100.0;      // number of convolution steps
-  Double_t sc =   5.0;      // convolution extends to +-sc Gaussian sigmas
-  
-  // Variables
-  Double_t xx;
-  Double_t mpc;
-  Double_t fland;
-  Double_t sum = 0.0;
-  Double_t xlow,xupp;
-  Double_t step;
-  Double_t i;
-
-  // MP shift correction
-  mpc = par[1] - mpshift * par[0];
-  
-  // Range of convolution integral
-  xlow = x[0] - sc * par[3];
-  xupp = x[0] + sc * par[3];
-  step = (xupp-xlow) / np;
-  
-  // Convolution integral of Landau and Gaussian by sum
-  for(i=1.0; i<=np/2; i++) {
-    xx = xlow + (i-.5) * step;
-    fland = TMath::Landau(xx,mpc,par[0]) / par[0];
-    sum += fland * TMath::Gaus(x[0],xx,par[3]);
-    xx = xupp - (i-.5) * step;
-    fland = TMath::Landau(xx,mpc,par[0]) / par[0];
-    sum += fland * TMath::Gaus(x[0],xx,par[3]);
-  }
-  return (par[2] * step * sum * invsq2pi / par[3]);
-}
-
-void GetEnergyBins(TH1F *h, std::vector<float> *r, std::map<int, float> & b){
-  // --------------------
-  // Divide the input energy histogram into sub-ranges within the values in vector r (energy ranges)
-  //  and computes the mean energy in each sub-range, storing the result in map b.
-  // --------------------
-  for(unsigned int i = 1; i < r->size(); i++){
-    TH1F *binHisto = new TH1F ( "binHisto", "binHisto", h -> FindBin(r->at(i)) - h->FindBin(r-> at(i-1)), r-> at(i-1), r->at(i));
-    int j = 1;
-    for (int bin = h->FindBin(r->at(i-1)) ; bin < h -> FindBin(r->at(i))+1 ; bin++){
-      binHisto -> SetBinContent( j, h->GetBinContent(bin));
-      j++;
-    }
-    b[i] = binHisto -> GetMean();
-    binHisto -> Delete();
-  }
-}
-
-void drawDeltaT(TCanvas *& c, TH1F *histo, TF1 *& fitFunc, std::string xaxis_label, std::string latex_label, std::string drawSame ){
-  // --------------------  
-  // Plots the time difference histogram, refines a Gaussian fit near the maximum,
-  //  and write effective sigma and fitted Gaussian resolution.
-  // --------------------  
-  c->cd();
-  histo -> SetTitle(Form("; %s #Deltat [ps];entries", xaxis_label.c_str()));
-  histo -> Draw(drawSame.c_str());
-  float* vals = new float[6];
-  FindSmallestInterval(vals,histo,0.68);
-  float min = vals[4];
-  float max = vals[5];
-  float delta = max-min;
-  float sigma = 0.5*delta;
-  float effSigma = sigma;
-  float fitXMin = histo->GetBinCenter(histo->GetMaximumBin()) - 200.;
-  float fitXMax = histo->GetBinCenter(histo->GetMaximumBin()) + 200.;
-  fitFunc -> SetParameters(1,histo->GetMean(),histo->GetRMS());
-  fitFunc -> SetRange(fitXMin, fitXMax);
-  histo -> Fit(fitFunc,"QNRSL");
-  fitFunc -> SetRange(fitFunc->GetParameter(1)-1.0*fitFunc->GetParameter(2),fitFunc->GetParameter(1)+1.0*fitFunc->GetParameter(2));
-  histo -> Fit(fitFunc,"QNRSL");
-  fitFunc -> SetRange(fitFunc->GetParameter(1)-2.5*fitFunc->GetParameter(2),fitFunc->GetParameter(1)+2.5*fitFunc->GetParameter(2));
-  histo -> Fit(fitFunc,"QRSL+");
-  fitFunc -> SetLineColor( histo -> GetLineColor() + 1 );
-  fitFunc -> SetLineWidth(3);
-  fitFunc -> Draw("same");
-  histo -> SetMaximum(histo->GetMaximum()+0.1*histo->GetMaximum());
-  histo -> GetXaxis() -> SetRangeUser(fitFunc->GetParameter(1)-7.*fitFunc->GetParameter(2),fitFunc->GetParameter(1)+7.*fitFunc->GetParameter(2));
-  TLatex* latex = new TLatex(0.55,0.85,Form("#splitline{#sigma_{%s}^{eff} = %.0f ps}{#sigma_{%s}^{gaus} = %.0f ps}",latex_label.c_str(),effSigma, latex_label.c_str(),fabs(fitFunc->GetParameter(2))));
-  if (drawSame == "same")
-    latex = new TLatex(0.20,0.85,Form("#splitline{#sigma_{%s}^{eff} = %.0f ps}{#sigma_{%s}^{gaus} = %.0f ps}",latex_label.c_str(),effSigma, latex_label.c_str(),fabs(fitFunc->GetParameter(2))));
-  latex -> SetNDC();
-  latex -> SetTextFont(42);
-  latex -> SetTextSize(0.04);
-  latex -> SetTextColor( histo -> GetLineColor() );
-  latex -> Draw("same");
-}
-
-
 // --------------------
 // ------ MAIN --------
 // --------------------
@@ -603,7 +494,7 @@ int main(int argc, char** argv)
   std::map<int,std::map<int,bool> > accept;
   for(auto mapIt : trees)
     {
-      ModuleEventClass* anEvent = new ModuleEventClass();
+      ModuleEventWithRefClass* anEvent = new ModuleEventWithRefClass();
       mapIt.second -> SetBranchAddress("event",&anEvent);
       int nEntries = mapIt.second->GetEntries();
       for(int entry = 0; entry < nEntries; ++entry)
@@ -796,7 +687,7 @@ int main(int argc, char** argv)
   // -----------------------------------------------------
   for(auto mapIt : trees)
     {
-      ModuleEventClass* anEvent = new ModuleEventClass();
+      ModuleEventWithRefClass* anEvent = new ModuleEventWithRefClass();
       mapIt.second -> SetBranchAddress("event",&anEvent);
       int nEntries = mapIt.second->GetEntries();
       for(int entry = 0; entry < nEntries; ++entry)
@@ -935,7 +826,7 @@ int main(int argc, char** argv)
   gStyle->SetOptFit(1111);
   for(auto mapIt : trees)
     {
-      ModuleEventClass* anEvent = new ModuleEventClass();
+      ModuleEventWithRefClass* anEvent = new ModuleEventWithRefClass();
       mapIt.second -> SetBranchAddress("event",&anEvent);
       int nEntries = mapIt.second->GetEntries();
       for(int entry = 0; entry < nEntries; ++entry)
@@ -1123,7 +1014,7 @@ int main(int argc, char** argv)
   // ----------------------------------------------------- 
   for(auto mapIt : trees)
     {
-      ModuleEventClass* anEvent = new ModuleEventClass();
+      ModuleEventWithRefClass* anEvent = new ModuleEventWithRefClass();
       mapIt.second -> SetBranchAddress("event",&anEvent);
       int nEntries = mapIt.second->GetEntries();
       for(int entry = 0; entry < nEntries; ++entry)
@@ -1354,7 +1245,7 @@ int main(int argc, char** argv)
   //-----------------------------------------------------
   for(auto mapIt : trees)
     {
-      ModuleEventClass* anEvent = new ModuleEventClass();
+      ModuleEventWithRefClass* anEvent = new ModuleEventWithRefClass();
       mapIt.second -> SetBranchAddress("event",&anEvent);
       int nEntries = mapIt.second->GetEntries();
       for(int entry = 0; entry < nEntries; ++entry)

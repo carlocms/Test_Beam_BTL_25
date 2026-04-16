@@ -9,8 +9,11 @@
 #include <sstream>
 #include <vector>
 #include <map>
+#include <tuple>
 
 #include "TH1F.h"
+#include "TF1.h"
+#include "TCanvas.h"
 
 #define PI 3.14159265359
 
@@ -58,6 +61,40 @@ public:
   float t1fine2R;
   
   ClassDef(EventClass,1);
+};
+
+class ModuleEventWithRefClass : public TObject {
+public:
+  int barID;
+  float Vov;
+  int vth;
+  // DUT bar
+  float energyL;
+  float energyR;
+  float totL;
+  float totR;
+  long long timeL;
+  long long timeR;
+  unsigned short t1fineL;
+  unsigned short t1fineR;
+  float qT1L;
+  float qT1R;
+  // reference bar
+  float energyL_ref;
+  float energyR_ref;
+  float totL_ref;
+  float totR_ref;
+  long long timeL_ref;
+  long long timeR_ref;
+  unsigned short t1fineL_ref;
+  unsigned short t1fineR_ref;
+  float qT1L_ref;
+  float qT1R_ref;
+  // tracking info
+  int nhits;
+  float x;
+  float y;
+  ClassDef(ModuleEventWithRefClass,1);
 };
 
 class ModuleEventClass : public TObject {
@@ -130,4 +167,12 @@ float DeltaPhi(const float& phi1, const float& phi2);
 float DeltaR(const float& eta1, const float& phi1, const float& eta2, const float& phi2);
 float FindXMaximum(TH1F* histo, const float& xMin, const float& xMax, const bool& checkDerivative = false);
 int FindBin(const float& val, const std::vector<float>* ranges);
+std::map<std::tuple<int,std::string,int,int>, float> loadCalibrationMap(const std::string& filename);
+Double_t langaufun(Double_t *x, Double_t *par);
+void GetEnergyBins(TH1F *h, std::vector<float> *r, std::map<int, float> & b);
+void drawDeltaT(TCanvas *& c, TH1F *histo, TF1 *& fitFunc, std::string xaxis_label, std::string latex_label, std::string drawSame);
+int findBarAndSide(int ch, int asic, std::vector<unsigned int>& channelMapping, std::string& side);
+using CalibKey = std::tuple<int,std::string,int,int>;
+using CalibMap = std::map<CalibKey, float>;
+void applyCalibration(float& energy, int bar, const std::string& side, float Vov, float vth, const CalibMap& calibMap);
 #endif
