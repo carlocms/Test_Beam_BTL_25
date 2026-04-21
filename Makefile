@@ -52,7 +52,7 @@ LDFLAGS  =  -rdynamic -shared -O2
 SONAME	 =  libTBStudies.so
 SOFLAGS  =  -Wl,-soname,
 
-GLIBS   =  -lm -ldl -rdynamic -L./DynamicTTree/lib -L./CfgManager/lib -lDynamicTTree -lCfgManager $(ROOTGLIBS)
+GLIBS   =  -lm -ldl -rdynamic -L./DynamicTTree/lib -L./CfgManager/lib -lDynamicTTree -lCfgManager -lASImage $(ROOTGLIBS)
 
 
 

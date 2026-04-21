@@ -1,0 +1,2 @@
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+cgiraldi 1037757 55.3  5.5 4676964 3342624 pts/0 Sl+  12:44  10:47 ./bin/moduleCharacterization_step1.exe ./cfg/moduleCharacterization_PKU_AA_Vov3.00_T18C.cfg

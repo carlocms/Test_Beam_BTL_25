@@ -12,7 +12,7 @@ TString cmsText     = "CMS";
 float cmsTextFont   = 61;  // default is helvetic-bold
 
 bool writeExtraText = false;
-TString extraText   = " Phase-2 Simulation";
+TString extraText   = " Test Beam";
 float extraTextFont = 52;  // default is helvetica-italics
 
 // text sizes and text offsets with respect to the top frame
@@ -125,15 +125,33 @@ void CMS_lumi(TPad* pad, int iPeriod=3, int iPosX=10)
   latex.SetTextAlign(31); 
   latex.SetTextSize(lumiTextSize*t);    
   latex.DrawLatex(1-r,1-t+lumiTextOffset*t,lumiText);
-  
-  if( outOfFrame )
+
+/*  
+ if( outOfFrame )
   {
     latex.SetTextFont(cmsTextFont);
     latex.SetTextAlign(11); 
     latex.SetTextSize(cmsTextSize*t);    
     latex.DrawLatex(l,1-t+lumiTextOffset*t,cmsText);
   }
-  
+*/
+
+  if( outOfFrame )
+{
+  float y = 1 - t + lumiTextOffset * t;
+
+  // --- CMS + extra text sulla stessa riga
+  latex.SetTextFont(cmsTextFont);
+  latex.SetTextAlign(11);
+  latex.SetTextSize(cmsTextSize * t);
+
+  TString fullText = cmsText;
+  if (writeExtraText) fullText += extraText;  // "CMS Test Beam"
+
+  latex.DrawLatex(l, y, fullText);
+}
+
+
   pad->cd();
   
   float posX_=0;

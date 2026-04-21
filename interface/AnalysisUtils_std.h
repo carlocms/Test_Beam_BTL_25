@@ -79,38 +79,11 @@ public:
   long long timeR;
   unsigned short t1fineL;
   unsigned short t1fineR;
-  long long t1coarseL;
-  long long t1coarseR;
   float qT1L;
   float qT1R;
   int nhits;
   float x;
   float y;
-
-// REF(bar 7):
-  long long timeL_ext;
-  long long timeR_ext;
-  float energyL_ext;
-  float energyR_ext;
-  unsigned short t1fineL_ext;
-  unsigned short t1fineR_ext;
-  long long t1coarseL_ext;
-  long long t1coarseR_ext;
-  float totL_ext;
-  float totR_ext;
-
-
-// MCP data:
-  double mcp_peak_time;
-  double mcp_peak_amp;
-  double mcp_phi_peak;
-  double mcp_phi_peak_from_edge;
-  double mcp_trigger_time;
-  double mcp_trigger_offset_ps;
-  double mcp_phi_trigger;
-  double mcp_phi_trigger_from_edge;
-  double mcp_t0_abs_ps;
-
   ClassDef(ModuleEventClass,1);
 };
 

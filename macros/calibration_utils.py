@@ -5,19 +5,21 @@ import os
 
 plt.rcParams.update({'font.size': 24})
 
-def plot_LO_calibration(csv_file, outdir="/eos/home-s/spalluot/www/MTD/MTDTB_CERN_Sep25/energy_intercalibration/LO_calibrations/"):
+def plot_LO_calibration(csv_file, outdir="/eos/home-c/cgiraldi/www/MTD/MTDTB_CERN_Sep25/energy_intercalibration/LO_calibrations/"):
     df = pd.read_csv(csv_file)
     df_L = df[df['side'] == 'L'].sort_values('bar')
     df_R = df[df['side'] == 'R'].sort_values('bar')
     rms_L = df_L['calib'].std()
     rms_R = df_R['calib'].std()    
     plt.figure(figsize=(12,10))
-    plt.plot(df_L['bar'], df_L['calib'], marker='o', linestyle='-', label=f'L (RMS={rms_L:.3f})', color="red")
-    plt.plot(df_R['bar'], df_R['calib'], marker='s', linestyle='-', label=f'R (RMS={rms_R:.3f})', color="blue")
+    #plt.plot(df_L['bar'], df_L['calib'], marker='o', linestyle='-', label=f'L (RMS={rms_L:.3f})', color="red")
+    #plt.plot(df_R['bar'], df_R['calib'], marker='s', linestyle='-', label=f'R (RMS={rms_R:.3f})', color="blue")
+    plt.plot(df_L['bar'].values, df_L['calib'].values, marker='o', linestyle='-', label=f'L (RMS={rms_L:.3f})', color="red")
+    plt.plot(df_R['bar'].values, df_R['calib'].values, marker='s', linestyle='-', label=f'R (RMS={rms_R:.3f})', color="blue")
     plt.axhline(1.0, linestyle=':', linewidth=1)
     plt.ylim(0.65,1.35)
-    plt.xlabel("Bar")
-    plt.ylabel("LO calibration")
+    plt.xlabel("Bar Index")
+    plt.ylabel("LO calibration coefficients")
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
@@ -48,7 +50,7 @@ def plot_TOFHIR_calibration(csv_file):
                 s = subset[subset["side"] == side].sort_values("bar")
                 rms = s["calib"].std()
                 label_plot = f"{side} (RMS={rms:.3f})"
-                plt.plot(s["bar"], s["calib"], marker="o", label=label_plot, color=colors[side])
+                plt.plot(s["bar"].values, s["calib"].values, marker="o", label=label_plot, color=colors[side])
             plt.xlabel("Bar")
             plt.ylabel("TOFHIR calibration")
             plt.title(f"Vov={vov}, th={thr}")
@@ -93,7 +95,7 @@ def plot_TOFHIR_calibration_multi(csv_files):
                 s = subset[subset["vov"] == vov].sort_values("bar")
                 rms = s["calib"].std()
                 label = f"Vov={vov} (RMS={rms:.3f})"
-                plt.plot(s["bar"], s["calib"], marker="o", color=colors[i % len(colors)], label=label)
+                plt.plot(s["bar"].values, s["calib"].values, marker="o", color=colors[i % len(colors)], label=label)
             plt.xlabel("Bar", fontsize=18)
             plt.ylabel("TOFHIR calibration", fontsize=18)
             plt.ylim(0.5,1.5)

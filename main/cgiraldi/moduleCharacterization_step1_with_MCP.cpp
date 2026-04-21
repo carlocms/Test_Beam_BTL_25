@@ -32,6 +32,10 @@
 #include "TRandom3.h"
 
 
+// Versione dello step 1 per uso Amplitude walk correction studies with MCP informatio as the external Time reference.
+// Author: Carlo Giraldin - INFN Trieste - February 2026
+
+
 
 
 int main(int argc, char** argv)
@@ -55,99 +59,25 @@ int main(int argc, char** argv)
   
 
   //--- open files and make the tree chain
-  std::string inputDir = opts.GetOpt<std::string>("Input.inputDir");
+  std::string inputDir = opts.GetOpt<std::string>("Input.inputDir_wMCP");
   std::string fileBaseName = opts.GetOpt<std::string>("Input.fileBaseName");
   std::string runs = opts.GetOpt<std::string>("Input.runs");
   int maxEntries = opts.GetOpt<int>("Input.maxEntries");
   int usePedestals = opts.GetOpt<int>("Input.usePedestals");
   std::string source = opts.GetOpt<std::string>("Input.sourceName");
   int useTrackInfo = opts.GetOpt<int>("Input.useTrackInfo");
-  float my_step1 = opts.GetOpt<float>("Input.vov") ;
+  float my_step1 = opts.GetOpt<float>("Input.vov");
+  bool Debug_on = opts.GetOpt<bool>("Input.debug_mod");
   
   int DUTasic = opts.GetOpt<int>("Channels.DUTasic");
   int REFasic = opts.GetOpt<int>("Channels.REFasic");
 
   std::string discCalibrationFile = opts.GetOpt<std::string>("Input.discCalibration");
   TOFHIRThresholdZero thrZero(discCalibrationFile,1);
-  std::string interCalibrationFile = opts.GetOpt<std::string>("Input.interCalibration");
 
   TChain* tree = new TChain("data","data");
+  TChain* tree_MCP = new TChain("MCP","MCP");
   
-
-  bool Debug_on = false;
-
-
-std::map<std::tuple<int,std::string,float,int>, float> calibMap;
-
-if (interCalibrationFile != "0")
-{
-  DIR* dir;
-  struct dirent* ent;
-
-  if ((dir = opendir(interCalibrationFile.c_str())) != nullptr)
-  {
-    while ((ent = readdir(dir)) != nullptr)
-    {
-      std::string fileName = ent->d_name;
-
-      if (fileName.find(".txt") == std::string::npos) continue;
-
-      int vth = -1;
-      size_t pos_th = fileName.find("th");
-      if (pos_th != std::string::npos)
-      {
-        vth = atoi(fileName.substr(pos_th+2,2).c_str());
-      }
-
-      if (vth < 0) continue;
-
-      float vov_run = my_step1;
-
-      std::ifstream fin(interCalibrationFile + "/" + fileName);
-      std::string line;
-
-      std::cout << ">>> Loading calibration file: " << fileName << " (vth=" << vth << ")" << std::endl;
-
-      while (getline(fin, line))
-      {
-        if (line.empty()) continue;
-        if (line[0] == '#') continue;
-
-        std::stringstream ss(line);
-
-        int bar;
-        std::string side;
-        float calib;
-
-        ss >> bar >> side >> calib;
-
-        calibMap[std::make_tuple(bar, side, vov_run, vth)] = calib;
-
-        if (debugMode)
-        {
-          std::cout << "[CALIB] bar=" << bar
-                    << " side=" << side
-                    << " vov=" << vov_run
-                    << " vth=" << vth
-                    << " calib=" << calib
-                    << std::endl;
-        }
-      }
-    }
-    closedir(dir);
-  }
-  else
-  {
-    std::cout << "[ERROR] Cannot open calibration directory: "
-              << interCalibrationFile << std::endl;
-  }
-
-  std::cout << ">>> Total calibration entries loaded: "
-            << calibMap.size() << std::endl;
-}
-
-//-------------------------------------------------------------------------
-
 
 
   std::stringstream ss(runs); 
@@ -185,7 +115,7 @@ if (interCalibrationFile != "0")
       }	
 
       for (auto fname: filenames) {
-	//std::cout << fname.c_str() << std::endl;;
+	std::cout << fname.c_str() << std::endl;;
 
 	if (fname == ".") continue;
 	if (fname == "..") continue;
@@ -204,6 +134,7 @@ if (interCalibrationFile != "0")
 	if (addFile){
 	  std::cout << ">>> step1 = " << step1 << " --> Adding file: " << fname.c_str()<< std::endl;
 	  tree->Add((directory_path+fname).c_str());
+	  tree_MCP->Add((directory_path+fname).c_str());
 	}
       }
 
@@ -222,10 +153,11 @@ if (interCalibrationFile != "0")
       chL[iBar] = channelMapping[iBar*2+0]+32*DUTasic;
       chR[iBar] = channelMapping[iBar*2+1]+32*DUTasic;
       
-      std::cout << "Bar: " << iBar << "   chL: "<< chL[iBar] << "    chR: " <<chR[iBar] <<std::endl;
+    std::cout << "Bar: " << iBar << "   chL: "<< chL[iBar] << "    chR: " <<chR[iBar] <<std::endl;
   }
   
-  //--- define branches
+
+  //--- define branches from TTree data:
   float step1, step2;
   int channelIdx[256];
   std::vector<unsigned short> *qfine = 0;
@@ -234,7 +166,7 @@ if (interCalibrationFile != "0")
   std::vector<long long> *time = 0;
   std::vector<float>* qT1 = 0;
   std::vector<unsigned short>* t1fine = 0;
-  std::vector<long long> *t1coarse = 0;
+  std::vector<unsigned short> *t1coarse = 0;
   
   int nhits;
   float x, y;
@@ -253,13 +185,38 @@ if (interCalibrationFile != "0")
   tree -> SetBranchStatus("qT1",       1); tree -> SetBranchAddress("qT1",      &qT1);
   tree -> SetBranchStatus("t1fine",    1); tree -> SetBranchAddress("t1fine",   &t1fine);
   tree -> SetBranchStatus("t1coarse",    1); tree -> SetBranchAddress("t1coarse",   &t1coarse);  
-  
+
   if ( !opts.GetOpt<std::string>("Input.sourceName").compare("TB") &&  useTrackInfo ){
     tree -> SetBranchStatus("nhits_WC", 1); tree -> SetBranchAddress("nhits_WC",  &nhits);
     tree -> SetBranchStatus("x_WC", 1);     tree -> SetBranchAddress("x_WC",          &x);
     tree -> SetBranchStatus("y_WC", 1);     tree -> SetBranchAddress("y_WC",          &y);
   }
   
+
+  //--- define branches from TTree MCP:
+  long long mcp_index;
+  double mcp_peak_time;
+  double mcp_peak_amp;
+  double mcp_phi_peak;
+  double mcp_phi_peak_from_edge;
+  double mcp_trigger_time;
+  double mcp_trigger_offset_ps;
+  double mcp_phi_trigger;
+  double mcp_phi_trigger_from_edge;
+  double mcp_t0_abs_ps;
+	
+  tree_MCP->SetBranchAddress("index",&mcp_index);
+  tree_MCP->SetBranchAddress("peak_time",&mcp_peak_time);
+  tree_MCP->SetBranchAddress("peak_amp",&mcp_peak_amp);
+  tree_MCP->SetBranchAddress("phi_peak",&mcp_phi_peak);
+  tree_MCP->SetBranchAddress("phi_peak_from_edge",&mcp_phi_peak_from_edge);
+  tree_MCP->SetBranchAddress("trigger_time",&mcp_trigger_time);
+  tree_MCP->SetBranchAddress("trigger_offset_ps",&mcp_trigger_offset_ps);
+  tree_MCP->SetBranchAddress("phi_trigger",&mcp_phi_trigger);
+  tree_MCP->SetBranchAddress("phi_trigger_from_edge",&mcp_phi_trigger_from_edge);
+  tree_MCP->SetBranchAddress("t0_abs_ps",&mcp_t0_abs_ps);
+
+
 
   //--- get plot settings
   std::vector<float> Vov = opts.GetOpt<std::vector<float> >("Plots.Vov");
@@ -309,7 +266,7 @@ if (interCalibrationFile != "0")
   
 
   //--- define histograms
-  std::string outFileName = opts.GetOpt<std::string>("Output.outFileNameStep1_TW");
+  std::string outFileName = opts.GetOpt<std::string>("Output.outFileNameStep1_withMCP");
   TFile* outFile = TFile::Open(Form("%s",outFileName.c_str()),"RECREATE");
   outFile -> cd();
   
@@ -325,14 +282,12 @@ if (interCalibrationFile != "0")
   std::map<int,TH1F*> h1_energyLR_ext;
   std::map<int,TH1F*> h1_MeanTimeREF;
   std::map<int,TH1F*> h1_maxBar_DUT;
-  //std::map<int,TH1F*> h1_DeltaPhase_REF;
-  //std::map<int,TH1F*> h1_energyLR_ext_v2;
-  std::map<int,TH1F*> h1_maxEne_REF_Bar;
+  std::map<int,TH1F*> h1_maxBar_REF;
+
   std::map<int,TCanvas*> c;
-  //std::map<int,TCanvas*> c1;
-  //std::map<int,TCanvas*> c2;
   std::map<int,std::vector<float>*> rangesLR;
   std::map<int,bool> acceptEvent;
+
 
 
 
@@ -340,14 +295,14 @@ if (interCalibrationFile != "0")
   // -- Coincidence pre loop
   if( !opts.GetOpt<std::string>("Coincidence.status").compare("yes") &&
       ( !opts.GetOpt<std::string>("Input.sourceName").compare("Na22SingleBar") ||
-        !opts.GetOpt<std::string>("Input.sourceName").compare("Na22") ||
-        !opts.GetOpt<std::string>("Input.sourceName").compare("TB") ||
-        !opts.GetOpt<std::string>("Input.sourceName").compare("keepAll") ) )
+	!opts.GetOpt<std::string>("Input.sourceName").compare("Na22") ||
+	!opts.GetOpt<std::string>("Input.sourceName").compare("TB") ||
+	!opts.GetOpt<std::string>("Input.sourceName").compare("keepAll") ) )
     {
       float energyL_ext;
       float energyR_ext;
-      int chL_ext = opts.GetOpt<float>("Coincidence.chL");
-      int chR_ext = opts.GetOpt<float>("Coincidence.chR");
+      int chL_ext = opts.GetOpt<float>("Coincidence.chL");//NB: gli passo direttamente da cfg il ch barra 8 +64
+      int chR_ext = opts.GetOpt<float>("Coincidence.chR");//NB: gli passo direttamente da cfg il ch barra 8 +64
       
       int nEntries = tree->GetEntries();
       if( maxEntries > 0 ) nEntries = maxEntries;
@@ -375,7 +330,7 @@ if (interCalibrationFile != "0")
 	// select only one OV
 	if (my_step1 > 0  && my_step1 != step1) continue;
 
-	if (channelIdx[chL_ext] <0 || channelIdx[chR_ext] <0) continue;
+	if (channelIdx[chL_ext] <0 || channelIdx[chR_ext] <0) continue; //Condizione che impone che la barra 8 REF deve essere accesa
 	
 
 	// --- calculate energy sum/Nbars for module - useful to remove showering events/cross talk
@@ -416,12 +371,12 @@ if (interCalibrationFile != "0")
 	    int chL_iext = channelMapping[iBar*2+0] + REFasic*32;
 	    int chR_iext = channelMapping[iBar*2+1] + REFasic*32;
 
-           // int chL_iext = channelMapping[iBar*2+0];// module under test is array1, coincidence channel in array0 
-           // int chR_iext = channelMapping[iBar*2+1];// module under test is array1, coincidence channel in array0 
-           // if (opts.GetOpt<int>("Channels.array")==0) {
-           //   int chL_iext = channelMapping[iBar*2+0]+64;// module under test is array0, coincidence channel in array1
-           //   int chR_iext = channelMapping[iBar*2+1]+64;// module under test is array0, coincidence channel in array1
-           // }	    
+	   // int chL_iext = channelMapping[iBar*2+0];// module under test is array1, coincidence channel in array0 
+	   // int chR_iext = channelMapping[iBar*2+1];// module under test is array1, coincidence channel in array0 
+	   // if (opts.GetOpt<int>("Channels.array")==0) {
+	   //   int chL_iext = channelMapping[iBar*2+0]+64;// module under test is array0, coincidence channel in array1
+	   //   int chR_iext = channelMapping[iBar*2+1]+64;// module under test is array0, coincidence channel in array1
+	   // }
 	    float energyL_iext = (*energy)[channelIdx[chL_iext]];              
 	    float energyR_iext = (*energy)[channelIdx[chR_iext]]; 
 	    float totL_iext    = 0.001*(*tot)[channelIdx[chL_iext]];              
@@ -434,17 +389,15 @@ if (interCalibrationFile != "0")
 	      }
 	    }
 	  }
-          //if (nActiveBarsArray > 5 ) continue;
-          if (nActiveBarsArray > 3 ) continue; //DEFAULT 3
-        //   if (nActiveBarsArray > 2 ) continue; //claudio
-        } //close if TB
+	  if (nActiveBarsArray > 3 ) continue; //Max number REF module active bars -> DEFAULT 3
+	}
 	
 	energyL_ext = (*energy)[channelIdx[chL_ext]];
 	energyR_ext = (*energy)[channelIdx[chR_ext]];
 	
 	int index( (10000*int(Vov*100.)) + (100*vth) + 99 );
 	
-	//--- histogram energy external bar REF module
+	//--- create histograms, if needed
 	if( h1_energyLR_ext[index] == NULL ){
 	  c[index] = new TCanvas(Form("c1_Vov%.2f_th%02.0f",Vov,vth), Form("c1_Vov%.2f_th%02.0f",Vov,vth));
 	  c[index] -> cd();
@@ -456,7 +409,8 @@ if (interCalibrationFile != "0")
 	
 	h1_energyLR_ext[index] -> Fill(0.5*(energyL_ext + energyR_ext));    
 	
-      }//close loop events
+      }
+
 
       
       std::cout << std::endl;
@@ -476,26 +430,27 @@ if (interCalibrationFile != "0")
 	for( auto index : h1_energyLR_ext){
 	  rangesLR[index.first] = new std::vector<float>;
 
+
 	  float Vov = float ((int(index.first /10000))/100.);
 	  float vth1 = float(int((index.first-Vov*10000*100)/100.));
 	  float vth2 = float(int((step2-10000*(vth1+1))/100.)-1);
           float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
           float vth = 0;
-
-          //std::cout << step2 << " ith1:1 " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
-
+       
+	  //std::cout << step2 << " ith1:1 " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
+       
 	  if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
           if(!opts.GetOpt<std::string>("Input.vth").compare("vth2"))  { vth = vth2;}
 	  if(!opts.GetOpt<std::string>("Input.vth").compare("vthE"))  { vth = vthE;}
 	  
 	  index.second->GetXaxis()->SetRangeUser(200,900);
-          //if( opts.GetOpt<int>("Channels.array") == 0){
-          //  //            index.second->GetXaxis()->SetRangeUser(50,900);
-          //  index.second->GetXaxis()->SetRangeUser(200,900);
-          //}
-          //if( opts.GetOpt<int>("Channels.array") == 1){
-          //  index.second->GetXaxis()->SetRangeUser(200,900);
-          //}
+	  //if( opts.GetOpt<int>("Channels.array") == 0){
+	  //  //	    index.second->GetXaxis()->SetRangeUser(50,900);
+	  //  index.second->GetXaxis()->SetRangeUser(200,900);
+	  //}
+	  //if( opts.GetOpt<int>("Channels.array") == 1){
+	  //  index.second->GetXaxis()->SetRangeUser(200,900);
+	  //}
 
 	  float max = index.second->GetBinCenter(index.second->GetMaximumBin());
 	  index.second->GetXaxis()->SetRangeUser(0,1024);
@@ -523,12 +478,14 @@ if (interCalibrationFile != "0")
       }
     }
   
-// End Coincidence pre-loop ------------------------------------------------------ 
-
-
-
-
   
+  
+
+
+
+
+
+
   //------------------------
   //--- 1st loop over events
   
@@ -543,11 +500,12 @@ if (interCalibrationFile != "0")
   long long timeR[16];
   unsigned short t1fineL[16]; 
   unsigned short t1fineR[16]; 
+  unsigned short t1coarseL[16];
+  unsigned short t1coarseR[16];
   float qT1L[16]; 
   float qT1R[16]; 
   float energyL[16];
   float energyR[16];
-
 
   // REF(bar 7):
   long long timeL_ext;
@@ -560,54 +518,103 @@ if (interCalibrationFile != "0")
   unsigned short t1fineR_ext;
   unsigned short t1coarseL_ext;
   unsigned short t1coarseR_ext;
-  long long phaseBar_L;
-  long long  phaseBar_R;
-  
+
+  // MCP data:
+  double mcp_peak_time_evt;
+  double mcp_peak_amp_evt;
+  double mcp_phi_peak_evt;
+  double mcp_phi_peak_from_edge_evt;
+  double mcp_trigger_time_evt; 
+  double mcp_trigger_offset_ps_evt;
+  double mcp_phi_trigger_evt;
+  double mcp_phi_trigger_from_edge_evt;
+  double mcp_t0_abs_ps_evt;
 
 
-  int nEntries = tree->GetEntries();
-  if( maxEntries > 0 ) nEntries = maxEntries;
-  for(int entry = 0; entry < nEntries; ++entry) {
-    tree -> GetEntry(entry);
-    if( entry%200000 == 0 )
+
+
+
+
+  // --- Event loop with both data and MCP tree:
+
+   int nEntries = tree->GetEntries();
+   if( maxEntries > 0 ) nEntries = maxEntries;
+
+   int mcpEntry = 0;
+   int nEntries_MCP = tree_MCP->GetEntries();
+
+   std::cout << "|| nEntries: " << nEntries << "||  nEntries_MCP: " << nEntries_MCP << std::endl;
+
+   int pass_count = 0; 
+
+   for(int entry = 0; entry < nEntries; ++entry) {
+
+      bool hasMCP = false;   
+      Long64_t globalEntry = entry;
+      tree->GetEntry(globalEntry);
+      int treeNumber = tree->GetTreeNumber();
+      Long64_t localEntry = globalEntry - tree->GetTreeOffset()[treeNumber];
+      TFile* currentFile = tree->GetCurrentFile();
+      std::string fileName = currentFile ? currentFile->GetName() : "UNKNOWN";
+
+      tree_MCP->GetEntry(mcpEntry);
+
+      if(mcp_index == localEntry) 
       {
-	std::cout << "\n>>> 1st loop: reading entry " << entry << " / " << nEntries << " (" << 100.*entry/nEntries << "%)" << std::endl;
-	TrackProcess(cpu, mem, vsz, rss);
+	      hasMCP = true;
+	      mcpEntry++;
+		      
+	      if (Debug_on) {	      
+		      std::cout
+			      << "[DEBUG] file: " << fileName << "\n"
+			      << "        treeNumber: " << treeNumber
+			      << " | globalEntry: " << globalEntry
+			      << " | localEntry: " << localEntry
+			      << " | mcpEntry: " << mcpEntry
+			      << " | mcp_index: " << mcp_index
+			      << std::endl;
+	      }
+      }
+
+      //-------------------------------------------------------------------------------
+      
+      if(hasMCP==false) continue; //coincidence with MCP required
+     
+     //-------------------------------------------------------------------------------
+
+
+      if (useTrackInfo && nhits > 0 &&  (x < -100 || y < -100 ) ) continue;
+
+      //std::cout << " ok, MCP selection" << std::endl;
+      pass_count ++;
+
+      float Vov = step1;
+      float vth1 = float(int(step2/10000)-1);
+      float vth2 = int((step2-10000*(vth1+1))/100.)-1;
+      float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
+      float vth = 0;
+      std::string vthMode = opts.GetOpt<std::string>("Input.vth");
+      if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
+      if(!opts.GetOpt<std::string>("Input.vth").compare("vth2"))  { vth = vth2;}
+      if(!opts.GetOpt<std::string>("Input.vth").compare("vthE"))  { vth = vthE;}
+      // float vthe = float(int((step2-10000*vth1-step2-100*vth2)/1)-1);
+      if( entry%20000 == 0 ){
+      std::cout << step2 << " ith1: " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
       }
     
-    if (useTrackInfo && nhits > 0 &&  (x < -100 || y < -100 ) ) continue;
+     // select only one OV
+     if (my_step1 > 0  && my_step1 != step1) continue;
 
-    float Vov = step1;
-    float vth1 = float(int(step2/10000)-1);
-    float vth2 = int((step2-10000*(vth1+1))/100.)-1;
-    float vthE = float(int((step2-10000*(vth1+1)) - 100*(vth2+1))-1);
-    float vth = 0;
-    std::string vthMode = opts.GetOpt<std::string>("Input.vth");
-    if(!opts.GetOpt<std::string>("Input.vth").compare("vth1"))  { vth = vth1;}
-    if(!opts.GetOpt<std::string>("Input.vth").compare("vth2"))  { vth = vth2;}
-    if(!opts.GetOpt<std::string>("Input.vth").compare("vthE"))  { vth = vthE;}
-    // float vthe = float(int((step2-10000*vth1-step2-100*vth2)/1)-1);
-    if( entry%20000 == 0 ){
-      std::cout << step2 << " ith1: " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
-    }
     
-    //std::cout << step2 << " ith1:1 " << vth1 << " ith2: " << vth2 << " E: " << vthE << std::endl;
-    // select only one OV
-    if (my_step1 > 0  && my_step1 != step1) continue;
-
-   
-    // --- check coincidence with another channel 
-    if(!opts.GetOpt<std::string>("Coincidence.status").compare("yes"))
-      {
+     // --- check coincidence with another channel 
+     if(!opts.GetOpt<std::string>("Coincidence.status").compare("yes"))
+       {
 	if(!acceptEvent[entry] ) continue;
 	
 	int chL_ext = opts.GetOpt<int>("Coincidence.chL");
 	int chR_ext = opts.GetOpt<int>("Coincidence.chR");
 	energyL_ext = (*energy)[channelIdx[chL_ext]];
 	energyR_ext = (*energy)[channelIdx[chR_ext]];
-	//float energyL_ext = (*energy)[channelIdx[chL_ext]];
-	//float energyR_ext = (*energy)[channelIdx[chR_ext]];
-
 	
 	int label = (10000*int(Vov*100.)) + (100*vth) + 99;
 	int eBin = opts.GetOpt<int>("Coincidence.peak511eBin");
@@ -616,60 +623,56 @@ if (interCalibrationFile != "0")
 	  continue;
 	}
 	
-	//Selection in REF module coincidence bar energy -> inside the rangeLR 
 	if ( (!opts.GetOpt<std::string>("Input.sourceName").compare("TB")) && ( avEn < rangesLR[label]-> at(0) || avEn > rangesLR[label]-> at(1) ) ) {
 	  continue;
 	}
-          
-	// REF(bar 7):
+      
+  
+
+        // REF(bar 7):
         timeL_ext = (*time)[channelIdx[chL_ext]];
         timeR_ext = (*time)[channelIdx[chR_ext]];
         t1fineL_ext = (*t1fine)[channelIdx[chL_ext]];
         t1fineR_ext = (*t1fine)[channelIdx[chR_ext]];
+	t1coarseL_ext = (*t1coarse)[channelIdx[chL_ext]];
+	t1coarseR_ext = (*t1coarse)[channelIdx[chR_ext]];
         totL_ext = 0.001*(*tot)[channelIdx[chL_ext]]; 
         totR_ext = 0.001*(*tot)[channelIdx[chR_ext]];
-        t1coarseL_ext = (*t1coarse)[channelIdx[chL_ext]];
-        t1coarseR_ext = (*t1coarse)[channelIdx[chR_ext]];
-        phaseBar_L = std::fmod(timeL_ext - (6250 * t1coarseL_ext), 6250.0);
-        phaseBar_R = std::fmod(timeR_ext - (6250 * t1coarseR_ext), 6250.0); 
-
+   
 
         // === Find max-energy bar in REF (after coincidence cuts) ===
-        // ===========================================================
-	int maxBar_REF = -1;
-        float maxEne_REF_bar = -999.;
+        int maxBar_REF = -1;
+        float maxE_REF = -999.;
 
         int index_REF( (10000*int(Vov*100.)) + (100*vth) );
-        for(int iBar = 0; iBar < 16; iBar++)
-	{ 
-	    int chL_ref = channelMapping[iBar*2+0] + REFasic*32;
-	    int chR_ref = channelMapping[iBar*2+1] + REFasic*32;
-            
-	   // std::cout << "iBar: " << iBar << "| chL_ref: " << chL_ref << "chR_ref: " << chR_ref << "|channelIdx[chL_ref]: " << channelIdx[chL_ref] << "|channelIdx[chR_ref]: " << channelIdx[chR_ref] << std::endl;
-            float EneMean_RefBar = 0.5 * ( (*energy)[channelIdx[chL_ref]] + (*energy)[channelIdx[chR_ref]] );
+        for(int iBar = 0; iBar < 16; iBar++){
+           int chL_ref = channelMapping[iBar*2+0] + REFasic*32;
+           int chR_ref = channelMapping[iBar*2+1] + REFasic*32;
 
-            if(EneMean_RefBar > maxEne_REF_bar){
-		    maxEne_REF_bar = EneMean_RefBar;
-		    maxBar_REF = iBar;
-	    }
-    	}
-
-    	if (maxBar_REF < -1) continue;
+           float Emean_ref = 0.5 * ( (*energy)[channelIdx[chL_ref]] + (*energy)[channelIdx[chR_ref]] );
+    
+	   if(Emean_ref > maxE_REF){
+              maxE_REF = Emean_ref;
+              maxBar_REF = iBar;
+	   }
+	}
+    
+	if (maxBar_REF < -1) continue;
+        //if(maxBar_REF != 7) continue;
         
-	if( h1_maxEne_REF_Bar[index_REF] == NULL )
-	{
-	    	h1_maxEne_REF_Bar[index_REF] = new TH1F(Form("h1_maxEne_REF_Bar_Vov%.2f_th%02.0f",Vov,vth),"",16,-0.5,15.5);
-	}   
-	h1_maxEne_REF_Bar[index_REF]->Fill(maxBar_REF); //plot REF bar indeces with max energy deposition
+        if( h1_maxBar_REF[index_REF] == NULL ) {
+	    	h1_maxBar_REF[index_REF] = new TH1F(Form("h1_maxBar_REF_Vov%.2f_th%02.0f",Vov,vth),"",16,-0.5,15.5);
+	}
+
+     h1_maxBar_REF[index_REF]->Fill(maxBar_REF);
+
+   }//if coincidence == yes
+
  
-	//==================================================================
-  
 
-      }//if coincidence == yes
 
-    
-    
-    //Loop on bars DUT    
+
+
     for(unsigned int iBar = 0; iBar < channelMapping.size()/2; ++iBar){
       
       if (channelIdx[chL[iBar]] >=0 && channelIdx[chR[iBar]] >=0){
@@ -684,58 +687,8 @@ if (interCalibrationFile != "0")
 	timeR[iBar]=(*time)[channelIdx[chR[iBar]]];
 	t1fineL[iBar]=(*t1fine)[channelIdx[chL[iBar]]];
 	t1fineR[iBar]=(*t1fine)[channelIdx[chR[iBar]]];
-
-
-	// --- if intercalibraion file specified in the config, apply corrections
-	if (interCalibrationFile != "0")
-	  {
-	    int vov_int = int(Vov * 100 + 0.5);
-	    int thr_int = int(vth);
-	    auto keyL = std::make_tuple(iBar, "L", Vov, vth);
-	    auto keyR = std::make_tuple(iBar, "R", Vov, vth);
-  // --- DEBUG PRINT
-  if (Debug_on)
-  {
-    std::cout << "\n[CALIB DEBUG]\n"
-              << "  bar: " << iBar
-              << " | side: L/R"
-              << " | Vov(raw): " << Vov
-              << " | vov_int: " << vov_int
-              << " | vth: " << vth
-              << " | thr_int: " << thr_int
-              << std::endl;
-
-    std::cout << "  -> keyL found? " << calibMap.count(keyL)
-              << " | keyR found? " << calibMap.count(keyR)
-              << std::endl;
-
-    if (calibMap.count(keyL))
-      std::cout << "  -> calibL = " << calibMap[keyL]
-                << " | energyL before = " << energyL[iBar]
-                << std::endl;
-
-    if (calibMap.count(keyR))
-      std::cout << "  -> calibR = " << calibMap[keyR]
-                << " | energyR before = " << energyR[iBar]
-                << std::endl;
-  }
-
-  // --- APPLY CALIBRATION
-  if (calibMap.count(keyL))
-  {
-    energyL[iBar] *= calibMap[keyL];
-    if (Debug_on)
-      std::cout << "     energyL after = " << energyL[iBar] << std::endl;
-  }
-
-  if (calibMap.count(keyR))
-  {
-    energyR[iBar] *= calibMap[keyR];
-    if (Debug_on)
-      std::cout << "     energyR after = " << energyR[iBar] << std::endl;
-  }
-}
-
+        t1coarseL[iBar]=(*t1coarse)[channelIdx[chL[iBar]]];
+        t1coarseR[iBar]=(*t1coarse)[channelIdx[chR[iBar]]];
 
 	}
       else
@@ -751,17 +704,17 @@ if (interCalibrationFile != "0")
 	  t1fineL[iBar]=-10;
 	  t1fineR[iBar]=-10;
 	} 
-   
     }// end loop over bars
     
     
-
-
-
-    //Shower-like events rejection:
-
+    
+    
+    
+    
+    
     int maxEn=0;
     int maxBar=0;
+
     float energySumArray = 0;
     int   nActiveBarsArray = 0;
     int nBarsVeto[16];
@@ -830,45 +783,45 @@ if (interCalibrationFile != "0")
 	}	
 	 
 
+ 
 	if( h1_MeanTimeREF[iBar] == NULL )
 	{	
 		h1_MeanTimeREF[iBar] = new TH1F(Form("h1_MeanTimeREF_bar%02dL-R",iBar),"",200,-10.,10);
 	}
       
+	
 
-        //--- fill histograms for each bar for Co60 & TB analysis
-        if( !opts.GetOpt<std::string>("Input.sourceName").compare("Co60") ||
-            !opts.GetOpt<std::string>("Input.sourceName").compare("Co60SumPeak") ||
-            !opts.GetOpt<std::string>("Input.sourceName").compare("TB")
-            )
-          {
-          if( totL[iBar] <= -10. || totR[iBar] <= -10. ) continue;
-          if( totL[iBar] >= 50. ||  totR[iBar] >= 50.) continue;
-          if( ( thrZero.GetThresholdZero(chL[iBar],vthMode) + vth) > 63. ) continue;
+
+
+
+	
+	//--- fill histograms for each bar for Co60 & TB analysis
+	if( !opts.GetOpt<std::string>("Input.sourceName").compare("TB"))
+	  {
+	  if( totL[iBar] <= -10. || totR[iBar] <= -10. ) continue;
+	  if( totL[iBar] >= 50. ||  totR[iBar] >= 50.) continue;
+	  if( ( thrZero.GetThresholdZero(chL[iBar],vthMode) + vth) > 63. ) continue;
           if( ( thrZero.GetThresholdZero(chR[iBar],vthMode) + vth) > 63. ) continue;
 
-          //if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (energySumArray > 900 || nActiveBarsArray > 5)) continue; // to remove showering events
-          //if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (vetoOtherBars && nBarsVeto[iBar] > 0)) continue; // to remove showering events/ cross talk
-          //if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (vetoOtherBars && nActiveBarsArray > 5)) continue; // to remove showering events
-          //if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (vetoOtherBars && nActiveBarsArray > 3)) continue; // to remove showering events
-          int maxActiveBars = 3; //DEFAULT 3
-          if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (vetoOtherBars && nActiveBarsArray > maxActiveBars)) continue; // to remove showering events
-	
+	  //if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (energySumArray > 900 || nActiveBarsArray > 5)) continue; // to remove showering events
+	  //if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (vetoOtherBars && nBarsVeto[iBar] > 0)) continue; // to remove showering events/ cross talk
+	  //if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (vetoOtherBars && nActiveBarsArray > 5)) continue; // to remove showering events
+	  //if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (vetoOtherBars && nActiveBarsArray > 3)) continue; // to remove showering events
+	  int maxActiveBars = 3; //DEFAULT 3
+	  if (!opts.GetOpt<std::string>("Input.sourceName").compare("TB") && (vetoOtherBars && nActiveBarsArray > maxActiveBars)) continue; // to remove showering events
 	  
+
 	  h1_qfineL[index] -> Fill( qfineL[iBar] );
 	  h1_totL[index] -> Fill( totL[iBar]  );
 	  h1_energyL[index] -> Fill( energyL[iBar] );
-
 	  h1_qfineR[index] -> Fill( qfineR[iBar] );
 	  h1_totR[index] -> Fill( totR[iBar] );
 	  h1_energyR[index] -> Fill( energyR[iBar] );
-
 	  h1_energyLR[index] -> Fill(0.5*(energyL[iBar]+energyR[iBar]));
-
 	  h1_MeanTimeREF[iBar] -> Fill((0.5*(timeL_ext+timeR_ext))/(10e14));
 
-
-	  //  REF (bar 7):
+	  
+	  //  REF(bar 7):
 	  anEvent.timeL_ext = timeL_ext;
           anEvent.timeR_ext = timeR_ext;
           anEvent.t1fineL_ext = t1fineL_ext;
@@ -905,125 +858,56 @@ if (interCalibrationFile != "0")
 	  }
 
 
+
+	  //MCP data:
+	  mcp_peak_time_evt= mcp_peak_time;
+          mcp_peak_amp_evt= mcp_peak_amp;
+          mcp_phi_peak_evt= mcp_phi_peak;
+	  mcp_phi_peak_from_edge_evt = mcp_phi_peak_from_edge;
+	  mcp_trigger_time_evt = mcp_trigger_time;
+	  mcp_trigger_offset_ps_evt = mcp_trigger_offset_ps;
+	  mcp_phi_trigger_evt = mcp_phi_trigger;
+	  mcp_phi_trigger_from_edge_evt = mcp_phi_trigger_from_edge;
+          mcp_t0_abs_ps_evt = mcp_t0_abs_ps;
+
+
+	  anEvent.mcp_peak_time = mcp_peak_time_evt;
+          anEvent.mcp_peak_amp = mcp_peak_amp_evt;
+          anEvent.mcp_phi_peak = mcp_phi_peak_evt;
+          anEvent.mcp_phi_peak_from_edge = mcp_phi_peak_from_edge_evt;
+          anEvent.mcp_trigger_time = mcp_trigger_time_evt;
+	  anEvent.mcp_trigger_offset_ps = mcp_trigger_offset_ps_evt;
+	  anEvent.mcp_phi_trigger = mcp_phi_trigger_evt;
+	  anEvent.mcp_phi_trigger_from_edge = mcp_phi_trigger_from_edge_evt;
+	  anEvent.mcp_t0_abs_ps = mcp_t0_abs_ps_evt;
+
+
 	  outTrees[index] -> Fill();
 	  }	  
 	}
 	}// -- end loop over bars
 
-/*
+
+
     // --- for TB max bar plots
     if( !opts.GetOpt<std::string>("Input.sourceName").compare("TB")) {
 
 	    int index_1( (10000*int(Vov*100.)) + (100*vth) );
-
-	    //if (maxBar == 0) continue;
-	    if( h1_DeltaPhase_REF[index_1] == NULL )
+	    if (maxBar == 0) continue;
+	    if( h1_maxBar_DUT[index_1] == NULL )
 	    {
-		    c1[index_1] = new TCanvas(Form("c11_Vov%.2f_th%02.0f",Vov,vth), Form("c11_Vov%.2f_th%02.0f",Vov,vth));
-		    c1[index_1] -> cd();
-
-		    //h1_maxBar_DUT[index_1] = new TH1F(Form("h1_maxBar_DUT_Vov%.2f_th%02.0f",Vov,vth),"",16,-0.5,15.5);
-		    h1_DeltaPhase_REF[index_1] = new TH1F(Form("h1_DeltaPhase_REF_Vov%.2f_th%02.0f",Vov,vth),"",200,-3000,3000);
+		    h1_maxBar_DUT[index_1] = new TH1F(Form("h1_maxBar_DUT_Vov%.2f_th%02.0f",Vov,vth),"",16,-0.5,15.5);
 	    }
 
-	    //h1_maxBar_DUT[index_1] -> Fill( maxBar);
-	    h1_DeltaPhase_REF[index_1] -> Fill (phaseBar_L - phaseBar_R);
-
-	    if( h1_energyLR_ext_v2[index_1] == NULL )
-            {
-                    c2[index_1] = new TCanvas(Form("c2_Vov%.2f_th%02.0f",Vov,vth), Form("c2_Vov%.2f_th%02.0f",Vov,vth));
-                    c2[index_1] -> cd();
-
-                    h1_energyLR_ext_v2[index_1] = new TH1F(Form("h1_energy_external_barL-R_v2_Vov%.2f_th%02.0f",Vov,vth),"",map_energyBins[Vov],map_energyMins[Vov],map_energyMaxs[Vov]);
-            }
-
-            h1_energyLR_ext_v2[index_1] -> Fill(0.5*(energyL_ext + energyR_ext));
-    
-    
-    }
-*/
-
-    // --- for TB max bar plots
-    if( !opts.GetOpt<std::string>("Input.sourceName").compare("TB")) {
-
-
-            int index_1( (10000*int(Vov*100.)) + (100*vth) );
-
-            if (maxBar == 0) continue;
-
-            if( h1_maxBar_DUT[index_1] == NULL )
-            {
-                    h1_maxBar_DUT[index_1] = new TH1F(Form("h1_maxBar_DUT_Vov%.2f_th%02.0f",Vov,vth),"",16,-0.5,15.5);
-            }
-
-            h1_maxBar_DUT[index_1] -> Fill( maxBar);
-
-            //outTrees[index_1] -> Fill();
+	    h1_maxBar_DUT[index_1] -> Fill( maxBar);
     }
 
+	   
 
-//-------------------------------------
-
-
-    // --- for Na22 or Laser analysis use only the bar with max energy to remove cross-talk between adjacent bars
-    if( !opts.GetOpt<std::string>("Input.sourceName").compare("Na22") ||
-        !opts.GetOpt<std::string>("Input.sourceName").compare("Na22SingleBar") ||
-        !opts.GetOpt<std::string>("Input.sourceName").compare("Laser") ||
-        !opts.GetOpt<std::string>("Input.sourceName").compare("keepAll") )
-      {
-        int index( (10000*int(Vov*100.)) + (100*vth) + maxBar );
-
-        if( totL[maxBar] <= -10. || totR[maxBar] <= -10. ) continue;
-        if( totL[maxBar] >= 50. ||  totR[maxBar] >= 50.) continue;
-        if( ( thrZero.GetThresholdZero(chL[maxBar],vthMode) + vth) > 63. ) continue;
-        if( ( thrZero.GetThresholdZero(chR[maxBar],vthMode) + vth) > 63. ) continue;
-
-        //--- fill histograms
-        h1_qfineL[index] -> Fill( qfineL[maxBar] );
-        h1_totL[index] -> Fill( totL[maxBar] );
-        h1_energyL[index] -> Fill( energyL[maxBar] );
-
-        h1_qfineR[index] -> Fill( qfineR[maxBar] );
-        h1_totR[index] -> Fill( totR[maxBar] );
-        h1_energyR[index] -> Fill( energyR[maxBar] );
-
-        h1_energyLR[index] -> Fill(0.5*(energyL[maxBar]+energyR[maxBar]));
-
-
-        anEvent.barID = maxBar;
-        anEvent.Vov = Vov;
-        anEvent.vth1 = vth;
-        anEvent.energyL = energyL[maxBar];
-        anEvent.energyR = energyR[maxBar];
-        anEvent.totL = totL[maxBar];
-        anEvent.totR = totR[maxBar];
-        anEvent.timeL = timeL[maxBar];
-        anEvent.timeR = timeR[maxBar];
-        anEvent.t1fineL = t1fineL[maxBar];
-        anEvent.t1fineR = t1fineR[maxBar];
-
-        if(useTrackInfo){
-          anEvent.nhits = nhits;
-          anEvent.x = x;
-          anEvent.y = y;
-        }
-        else{
-          anEvent.nhits = -1;
-          anEvent.x = -999.;
-          anEvent.y = -999.;
-        }
-        outTrees[index] -> Fill();
-      }
-
-
-
-    
-
-
-
-
-  } // --- end loop over events
+	  } // --- end loop over events
   
+// std::cout << "pass_count:" << pass_count << std::endl;
+
   int bytes = outFile -> Write();
   std::cout << "============================================"  << std::endl;
   std::cout << "nr of  B written:  " << int(bytes)             << std::endl;

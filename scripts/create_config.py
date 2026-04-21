@@ -6,8 +6,8 @@ import sys
 from channelMapping import *
 
 # ------ MODIFY YOUR PATHS HERE -------
-Lab5015_path = "/eos/home-s/spalluot/MTD/TB_CERN_Sep25/Lab5015Analysis"
-plot_path = "/eos/home-s/spalluot/www/MTD/MTDTB_CERN_Sep25"
+Lab5015_path = "/eos/home-c/cgiraldi/MTD/TB_CERN_Sep25/Lab5015Analysis"
+plot_path = "/eos/home-c/cgiraldi/www/MTD/MTDTB_CERN_Sep25"
 # -------------------------------------
 
 
@@ -71,7 +71,7 @@ temp_min = cfgFolder / f"minEnergies_{args.modulelabel}.txt"
 # copy minEnergy file if it does not exist
 # ----------------------------
 if not temp_min.exists():
-    base_min = cfgFolder / "minEnergies_base.txt"
+    base_min = cfgFolder / "minEnergies_base_TOFHIR2C.txt"
     shutil.copy(base_min, temp_min)
 
     

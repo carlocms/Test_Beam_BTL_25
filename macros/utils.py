@@ -19,9 +19,9 @@ from array import array
 
 import CMS_lumi, tdrstyle
 
-from slewRate import *
+#from slewRate import *
 from SiPM import *
-from moduleDict import *
+#from moduleDict import *
 from calibration_utils import *
 
 stochPow=0.73

@@ -1,3 +1,6 @@
+#ifndef FITUTILS_H
+#define FITUTILS_H
+
 #include "CfgManager/interface/CfgManager.h"
 #include "CfgManager/interface/CfgManagerT.h"
 
@@ -28,3 +31,5 @@ struct CTRResult
   float gausSigma;
   float gausSigmaErr;
 };
+
+#endif
