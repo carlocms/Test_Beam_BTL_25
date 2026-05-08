@@ -10,6 +10,20 @@ from slewRate import *
 from SiPM import *
 from moduleDict import *
 from calibration_utils import *
+from draw_functions import *
+
+cms_colors = [
+    ROOT.TColor.GetColor("#3f90da"),
+    ROOT.TColor.GetColor("#ffa90e"),
+    ROOT.TColor.GetColor("#bd1f01"),
+    ROOT.TColor.GetColor("#94a4a2"),
+    ROOT.TColor.GetColor("#832db6"),
+    ROOT.TColor.GetColor("#a96b59"),
+    ROOT.TColor.GetColor("#e76300"),
+    ROOT.TColor.GetColor("#b9ac70"),
+    ROOT.TColor.GetColor("#717581"),
+    ROOT.TColor.GetColor("#92dadd")
+]
 
 # ----- Set TDR style ------
 tdrstyle.setTDRStyle()
@@ -31,20 +45,6 @@ ROOT.gErrorIgnoreLevel = ROOT.kWarning
 ROOT.gStyle.SetOptStat(0)
 ROOT.gStyle.SetOptFit(111)
 
-# ---- Define CMS palette ----
-cms_colors = [
-    ROOT.TColor.GetColor("#3f90da"),
-    ROOT.TColor.GetColor("#ffa90e"),
-    ROOT.TColor.GetColor("#bd1f01"),
-    ROOT.TColor.GetColor("#94a4a2"),
-    ROOT.TColor.GetColor("#832db6"),
-    ROOT.TColor.GetColor("#a96b59"),
-    ROOT.TColor.GetColor("#e76300"),
-    ROOT.TColor.GetColor("#b9ac70"),
-    ROOT.TColor.GetColor("#717581"),
-    ROOT.TColor.GetColor("#92dadd")
-]
-
 # ------- Utility functions ------
 def intersection(lst1,lst2):
     lstIntersection = [value for value in lst1 if value in lst2] 
@@ -65,7 +65,6 @@ def remove_useless_dirs(path):
                 if "index.php" in file_list:
                     os.remove(os.path.join(full, "index.php"))
                 os.rmdir(full)
-
 
 # -------- Latex labels -------
 def draw_logo():
@@ -255,12 +254,11 @@ def fit_landau_langaus(h, emin, emax, landau_only=False):
             "landau_width_err" : w_landau_err
         }
     else:
-        #f_lg = ROOT.TF1("f_lg", getattr(ROOT,"langaufun"), emin, emax, 4)
         f_lg = ROOT.TF1("f_lg", getattr(ROOT,"langaufun"), mpv_landau*0.8, mpv_landau*1.6, 4)
         f_lg.SetParLimits(0, 0.5*w_landau, 1.5*w_landau)
         f_lg.SetParLimits(1, mpv_landau*0.5, mpv_landau*1.5)    # MPV
         f_lg.SetParLimits(2, 0.5*integral, 25*integral)
-        f_lg.SetParLimits(3, 0.001*mpv_landau, 0.5*mpv_landau)   # Gaussian sigma
+        f_lg.SetParLimits(3, 0.01*mpv_landau, 0.15*mpv_landau)   # Gaussian sigma
         f_lg.SetParameters(w_landau, mpv_landau, integral, 0.04*mpv_landau)
         h.Fit(f_lg, "QR")
         mpv_lang = f_lg.GetParameter(1)
