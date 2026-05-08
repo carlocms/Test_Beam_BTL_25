@@ -3,8 +3,21 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import os
 import csv
-
 plt.rcParams.update({'font.size': 24})
+
+# ---- Define CMS palette ----
+cms_colors = [
+    "#3f90da",
+    "#ffa90e",
+    "#bd1f01",
+    "#94a4a2",
+    "#832db6",
+    "#a96b59",
+    "#e76300",
+    "#b9ac70",
+    "#717581",
+    "#92dadd"
+]
 
 def plot_LO_calibration(csv_file, outdir="/eos/home-s/spalluot/www/MTD/MTDTB_CERN_Sep25/energy_intercalibration/LO_calibrations/"):
     """
@@ -31,7 +44,7 @@ def plot_LO_calibration(csv_file, outdir="/eos/home-s/spalluot/www/MTD/MTDTB_CER
     output = os.path.join(outdir, plot_name)
     plt.savefig(output, dpi=300, bbox_inches="tight")
     plt.close()
-    print(f"Saved LO calibrations plot in: {output}")
+    print(f"[INFO] Saved LO calibrations plot in: {output}")
 
 
 def plot_TOFHIR_calibration(csv_file):
@@ -67,7 +80,7 @@ def plot_TOFHIR_calibration(csv_file):
             plt.ylim(calib_min,calib_max)
             plt.legend()
             plt.grid(True)
-            filename = outdir / f"TOFHIR_calibration_vs_bar_vov{vov}_th{thr}.png"
+            filename = outdir / f"TOFHIR_calibration_vs_bar_Vov{vov:.2f}_th{thr:02d}.png"
             plt.savefig(filename, dpi=300, bbox_inches="tight")
             plt.close()
         # heatmap
@@ -82,10 +95,10 @@ def plot_TOFHIR_calibration(csv_file):
             plt.title(f"{side} - Vov={vov}")
             plt.xlabel("Bar")
             plt.ylabel("Threshold")
-            filename = outdir / f"TOFHIR_calibration_heatmap_{side}_vov{vov}.png"
+            filename = outdir / f"TOFHIR_calibration_heatmap_{side}_Vov{vov:.2f}.png"
             plt.savefig(filename, dpi=300, bbox_inches="tight")
             plt.close()
-    print(f"Saved TOFHIR calibrations plot in: {outdir}")
+    print(f"[INFO] Saved TOFHIR calibrations plot in: {outdir}")
 
 
 def plot_TOFHIR_calibration_multi(csv_files):
@@ -100,7 +113,8 @@ def plot_TOFHIR_calibration_multi(csv_files):
     sides = ["L","R"]
     thresholds = sorted(df["th"].unique())
     vovs = sorted(df["vov"].unique())
-    colors = ["green","orange","purple","dodgerblue","magenta","cyan"]
+    colors = cms_colors
+    #colors = ["green","orange","purple","dodgerblue","magenta","cyan"]
     for thr in thresholds:
         for side in sides:
             subset = df[(df["th"] == thr) & (df["side"] == side)]
@@ -115,12 +129,55 @@ def plot_TOFHIR_calibration_multi(csv_files):
             plt.ylim(0.5,1.5)
             plt.legend(fontsize=14)
             plt.grid(True)
-            filename = outdir / f"TOFHIR_calibration_vs_bar_side{side}_th{thr}.png"
+            filename = outdir / f"TOFHIR_calibration_vs_bar_side{side}_th{thr:02d}.png"
             plt.savefig(filename, dpi=300, bbox_inches="tight")
             plt.close()
-    print(f"Saved TOFHIR multi-Vov plots in: {outdir}")
+    print(f"[INFO] Saved TOFHIR multi-Vov plots in: {outdir}")
 
+def plot_calibrations(csv_files, outLabel, labels=None, ylim=None):
+    """
+    Compare calib vs bar for each combination of vov th side
+    """
+    dfs = []
+    colors = cms_colors
+    outdir = Path(csv_files[0]).parents[1]
+    outpath = f'{outdir}/{outLabel}'
+    os.makedirs(outpath, exist_ok=True)
+    if labels is None:
+        labels = [os.path.basename(os.path.dirname(f)) for f in csv_files]
+    if len(labels) != len(csv_files):
+        raise ValueError("[ERROR] labels e csv_files must have same lengths")
+    for f, label in zip(csv_files, labels):
+        df = pd.read_csv(f)
+        df["source"] = label
+        dfs.append(df)
+    data = pd.concat(dfs, ignore_index=True)
 
+    # find all combinations
+    combos = data[["vov", "th", "side"]].drop_duplicates()
+    for _, row in combos.iterrows():
+        vov, th, side = row["vov"], row["th"], row["side"]
+        subset = data[ (data["vov"] == vov) &
+                       (data["th"] == th) &
+                       (data["side"] == side)]
+        plt.figure(figsize=(12,10))
+        i = 0
+        for name, group in subset.groupby("source"):
+            plt.plot(group["bar"], group["calib"], marker='o', label=name, color=colors[i % len(colors)])
+            i=i+1
+        plt.xlabel("bar")
+        plt.ylabel("calib")
+        plt.title(f"Vov={vov}, th={th}, side={side}")
+        plt.legend()
+        plt.grid()
+        if ylim:
+            plt.ylim(*ylim)
+        os.makedirs(outpath, exist_ok=True)
+        fname = f"TOFHIR_calibration_vs_bar_Vov{vov:.2f}_side{side}_th{th:02d}.png"
+        plt.savefig(os.path.join(outpath, fname), dpi=150)
+        plt.close()
+    print(f"[INFO] Saved TOFHIR calib plots in: {outpath}")
+    
 def get_rebin_factor(integral):
     """
     Chooeses a rebin factor based on the signal integral
@@ -133,12 +190,8 @@ def get_rebin_factor(integral):
         return 4
     elif integral > 4000:
         return 8
-    elif integral > 2000:
-        return 16
-    elif integral > 1000:
-        return 32
     else:
-        return 64
+        return 16
     
 def read_min_energy(txt_file):
     """

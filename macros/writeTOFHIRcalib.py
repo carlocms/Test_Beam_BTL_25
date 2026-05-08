@@ -13,8 +13,8 @@ outdir_base = "/eos/home-s/spalluot/www/MTD/MTDTB_CERN_Sep25/energy_intercalibra
 # ------- parser -------
 parser = argparse.ArgumentParser(description="Energy spectra calibration")
 parser.add_argument("-i", "--inputFile", required=True, type=str, help="Input ROOT file")
-parser.add_argument("-o", "--outFolder", required=True, type=str, help="Output folder")
-parser.add_argument("-sm", "--sensorModuleID", required=True, type=str, help="Sensor module ID for QAQC calibrations")
+parser.add_argument("-o", "--outFolder", required=False,default=None, type=str, help="Output folder. default=input name")
+parser.add_argument("-sm", "--sensorModuleID", required=True, type=str, help="Sensor module ID for QAQC calibrations (e.g. 32110020000691)")
 parser.add_argument("--minEnergy", required=True, type=str, help="minEnergy config file name")
 parser.add_argument("--drawCalib", required=False, action="store_true", help="Produce calibration plots vs bar")
 parser.add_argument("--writeOutFile", required=False, action="store_true", help="Write output file with corrected energy spectra")
@@ -24,6 +24,8 @@ parser.add_argument("--drawMPVvsBar", required=False, action="store_true", help=
 args = parser.parse_args()
 input_file = args.inputFile
 sensor_module_id = args.sensorModuleID
+if args.outFolder == None:
+    args.outFolder = args.inputFile
 
 # -- directories
 inputdir = f"{eos_path}/plots"
@@ -242,7 +244,6 @@ if args.drawComparison:
 
         integral = h_raw.Integral()
         rebin = get_rebin_factor(integral)
-
         h_raw.Rebin(rebin)
         h_localib.Rebin(rebin)
         h_tofcalib.Rebin(rebin)
@@ -294,10 +295,6 @@ if args.drawMPVvsBar:
         mpv_tof[key] = mpv_raw[key]*calib_tofhir_only[key]
         mpv_lo[key] = mpv_raw[key]*calib_LO[(bar,side)]
         mpv_tof_lo[key] = mpv_raw[key]*calib_tofhir_lo[key]
-        if side == "R" and thr==10:
-            print(f"\n ---- {key} ----")
-            print(f"integral: {h_clone.Integral()}")
-            print(f"Raw: {mpv_raw[key]:.0f} \t TOFHIR only {mpv_tof[key]:.0f} \t LO only {mpv_lo[key]:.0f} \t all {mpv_tof_lo[key]:.0f}")
         
     for vov in Vovs:
         for thr in thresholds:
