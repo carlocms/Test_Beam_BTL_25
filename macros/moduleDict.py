@@ -318,6 +318,11 @@ def good_bars(module, ovs, bars):
         good_bars_[1.00] = [2,3,4,5,6,7,8,9,10,11,12,13,14]
         good_bars_[0.80] = [2,3,4,5,6,7,8,9,10,11,12,13,14]
         good_bars_[0.60] = [7,8,9,10,11,12]
+    elif 'DM_348' in module:
+        good_bars_[3.00] = [6,7,8,9,10]
+        good_bars_[2.00] = [6,7,8,9,10]
+        good_bars_[1.20] = [6,7,8,9,10]
+        good_bars_[0.90] = [6,7,8,9,10]
     else:
         for vov in ovs:
             good_bars_[vov] = bars 
