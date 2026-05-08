@@ -23,11 +23,13 @@ parser.add_argument("-th", "--threshold", required=True, type=str, help="thresho
 parser.add_argument("-vth1", "--thresholdT1", required=False, default="-1", type=str, help="specific threshold for T1")
 parser.add_argument("-vth2", "--thresholdT2", required=False, default="-1", type=str, help="specific threshold for T2")
 parser.add_argument("-vthe", "--thresholdE",  required=False, default="-1", type=str, help="specific threshold for E")
-parser.add_argument("-e", "--extraLabel", required=False,  type=str, help="eg: angle or check or whatever")
+parser.add_argument("-e", "--extraLabel", required=False,  type=str,  default="", help="eg: angle or check or whatever")
+parser.add_argument("--whichEnergyIntercalib", required=False,  default="", type=str, help="i.e. TOFHIR, TOFHIR_LO or empty for None")
 parser.add_argument("--dutASIC", required=False, default=7, type=int, help="the DUT ASIC position (default set to 7)")
 parser.add_argument("--refASIC", required=False, default=4, type=int, help="the REF ASIC position (default set to 4)")
 parser.add_argument("--refBar",  required=False, type=int, help="the REF bar on which ask for coincidence (default set to 7 in the code)")
 parser.add_argument("--saveRefInfoFlag", required=False, type=int, default=0, help="0 or 1: flag to set if reference info should be saved")
+parser.add_argument("--refCalibPath",    required=False, type=str, default="DM_348_Vov3.00_T18C", help="REF module label used to get the energy intercalibration factors (default: DM_348_Vov3.00_T18C)")
 args = parser.parse_args()
 
 # -- changing the options on REF and DUT ASICs might not be necessary for all the studies
@@ -42,16 +44,31 @@ else:
         args.extraLabel = "refBar"+str(args.refBar)
 chL = args.refASIC*32 + map_bar_LR[args.refBar][0]
 chR = args.refASIC*32 + map_bar_LR[args.refBar][1]
-print("channel left ", chL, "   channel right ", chR)
+print("\n-- Ref ch: \tchannel left ", chL, "   channel right ", chR)
 
+# if calibration factors are to be included, add an extralabel
+if args.whichEnergyIntercalib != "":
+    if args.extraLabel == "":
+        args.extraLabel = f"{args.whichEnergyIntercalib}calib"
+    else:
+        args.extraLabel += f"_{args.whichEnergyIntercalib}calib"
+    intercalib_path = "Plot_repo_path/energy_intercalibration/baseGeneralLabel/whichCalibration_calibration_factors.csv"
+    intercalib_path_ref = f"Plot_repo_path/energy_intercalibration/{args.refCalibPath}/whichCalibration_calibration_factors.csv"
+else:
+    intercalib_path = "0"
+    intercalib_path_ref = "0"
 
+    
 # config label
 # ----------------------------
 Vov_float = float(args.Vov)
-label = f"{args.modulelabel}_Vov{Vov_float:.2f}_T{args.temperature}C"
+base_label = f"{args.modulelabel}_Vov{Vov_float:.2f}_T{args.temperature}C"
 if args.extraLabel:
-    label += f"_{args.extraLabel}"
-
+    label = f"{base_label}_{args.extraLabel}"
+else:
+    label = base_label
+print(f"-- Config: \t{args.config}")
+    
 # path
 # ----------------------------
 cfg_path = f"{Lab5015_path}/cfg"
@@ -86,10 +103,12 @@ def write_cfg(base_path: Path, out_path: Path, replacements: dict, check_Vov: bo
 # ----------------------------
 base_module_cfg = cfgFolder / "moduleCharacterization_base.cfg"
 out_module_cfg = cfgFolder / f"moduleCharacterization_{label}.cfg"
-print(f"writing \t {out_module_cfg.name}")
+print(f"-- Writing \t{out_module_cfg.name}")
 
 # replace the words find in the cfg_base (key) with the item of this dict
 replacements_module = {
+    "interCalibPath" : intercalib_path,
+    "interCalibPath_ref" : intercalib_path_ref,
     "Lab5015_repo_path": Lab5015_path,
     "Plot_repo_path": plot_path,
     "runNumbers": args.runs,
@@ -106,11 +125,12 @@ replacements_module = {
     "refASIC_ch" : args.refASIC,
     "dutASIC_ch" : args.dutASIC,
     "saveReferenceModuleInfoFlag" : args.saveRefInfoFlag,
-    "channelMapping_list_from_bar0_to_bar15" : get_TOFHIR_channel_mapping()
+    "channelMapping_list_from_bar0_to_bar15" : get_TOFHIR_channel_mapping(),
+    "whichCalibration" : args.whichEnergyIntercalib,
+    "baseGeneralLabel" : base_label
 }
 
 write_cfg(base_module_cfg, out_module_cfg, replacements_module, check_Vov=True)
-print(f"config : {args.config}")
 
 
 # drawPulseShapeTB.cpp needs few adjustments for the new structure with DUT and REF ASIC settings
