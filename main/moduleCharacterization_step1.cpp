@@ -703,8 +703,8 @@ int main(int argc, char** argv)
       std::cout << f << std::endl;
     }
   }
-  
-  std::cout <<"[WARNING] REF module calibrations are hard-coded to take Vov 3V and threshold 10. In Sep25 TB no other configurations were acquired. It's not valid in general but ok" <<std::endl ;
+  if (interCalibrationFile_ref != "0")
+    std::cout <<"\n[WARNING] REF module calibrations are hard-coded to take Vov 3V and threshold 10. In Sep25 TB no other configurations were acquired." <<std::endl ;
   // summary output sizes
   int bytes = outFile -> Write();
   std::cout << "============================================"  << std::endl;

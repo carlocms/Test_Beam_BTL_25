@@ -32,42 +32,63 @@ parser.add_argument("--saveRefInfoFlag", required=False, type=int, default=0, he
 parser.add_argument("--refCalibPath",    required=False, type=str, default="DM_348_Vov3.00_T18C", help="REF module label used to get the energy intercalibration factors (default: DM_348_Vov3.00_T18C)")
 args = parser.parse_args()
 
-# -- changing the options on REF and DUT ASICs might not be necessary for all the studies
-# -   default values are set in the argparse
+if args.whichEnergyIntercalib != "":
+    print("\nThe assumption is that the energy intercalibration file is of the kind <DM_label><refBar>, so the <extra_label> is not used to retrieve the calibration files")
+
+# checks on ASICS : DUT e REF ASICs cannot be the same
+# -----------------------------------------------------
+if args.refASIC == args.dutASIC:
+    print("[ERROR] DUT and REF ASICs cannot be the same")
+    sys.exit(1)
+
+# default ref bar
+# ------------------------------
 if args.refBar is None:
     args.refBar = 7
 else:
     # - if the reference bar is not the default one, add an extra label
     if args.extraLabel:
-        args.extraLabel += "refBar"+str(args.refBar)
+        args.extraLabel += "_refBar"+str(args.refBar)
     else:
         args.extraLabel = "refBar"+str(args.refBar)
+
+# base label
+# ----------------------------
+Vov_float = float(args.Vov)
+base_label = f"{args.modulelabel}_Vov{Vov_float:.2f}_T{args.temperature}C"
+
+# channels
+# -------------------------
 chL = args.refASIC*32 + map_bar_LR[args.refBar][0]
 chR = args.refASIC*32 + map_bar_LR[args.refBar][1]
 print("\n-- Ref ch: \tchannel left ", chL, "   channel right ", chR)
 
-# if calibration factors are to be included, add an extralabel
+
+# intercalib labels
+# -------------------------
+# the intercalib label is the one of the energy intercalibration csv files
+intercalib_label = f"{base_label}_refBar"+str(args.refBar)
+
+# when applying the energy intercalibrations, use the TOFHIR or TOFHIR_LO label to keep the info in the name of the file
 if args.whichEnergyIntercalib != "":
     if args.extraLabel == "":
         args.extraLabel = f"{args.whichEnergyIntercalib}calib"
     else:
         args.extraLabel += f"_{args.whichEnergyIntercalib}calib"
-    intercalib_path = "Plot_repo_path/energy_intercalibration/baseGeneralLabel/whichCalibration_calibration_factors.csv"
+    intercalib_path = "Plot_repo_path/energy_intercalibration/intercalibLabel/whichCalibration_calibration_factors.csv"
     intercalib_path_ref = f"Plot_repo_path/energy_intercalibration/{args.refCalibPath}/whichCalibration_calibration_factors.csv"
 else:
     intercalib_path = "0"
     intercalib_path_ref = "0"
 
-    
-# config label
-# ----------------------------
-Vov_float = float(args.Vov)
-base_label = f"{args.modulelabel}_Vov{Vov_float:.2f}_T{args.temperature}C"
+# general label
+# ------------------------- 
 if args.extraLabel:
-    label = f"{base_label}_{args.extraLabel}"
+    generalLabel = f"{base_label}_{args.extraLabel}"
 else:
-    label = base_label
+    generalLabel = base_label
 print(f"-- Config: \t{args.config}")
+
     
 # path
 # ----------------------------
@@ -102,17 +123,17 @@ def write_cfg(base_path: Path, out_path: Path, replacements: dict, check_Vov: bo
 # ModuleCharacterization cfg
 # ----------------------------
 base_module_cfg = cfgFolder / "moduleCharacterization_base.cfg"
-out_module_cfg = cfgFolder / f"moduleCharacterization_{label}.cfg"
+out_module_cfg = cfgFolder / f"moduleCharacterization_{generalLabel}.cfg"
 print(f"-- Writing \t{out_module_cfg.name}")
 
 # replace the words find in the cfg_base (key) with the item of this dict
 replacements_module = {
     "interCalibPath" : intercalib_path,
-    "interCalibPath_ref" : intercalib_path_ref,
+    "interCalibpath_ref" : intercalib_path_ref,
     "Lab5015_repo_path": Lab5015_path,
     "Plot_repo_path": plot_path,
     "runNumbers": args.runs,
-    "generalLabel": label,
+    "generalLabel": generalLabel,
     "moduleLabel": args.modulelabel,
     "confNumber": args.config,
     "vovLabel": args.Vov,
@@ -127,7 +148,7 @@ replacements_module = {
     "saveReferenceModuleInfoFlag" : args.saveRefInfoFlag,
     "channelMapping_list_from_bar0_to_bar15" : get_TOFHIR_channel_mapping(),
     "whichCalibration" : args.whichEnergyIntercalib,
-    "baseGeneralLabel" : base_label
+    "intercalibLabel" : intercalib_label
 }
 
 write_cfg(base_module_cfg, out_module_cfg, replacements_module, check_Vov=True)

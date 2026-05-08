@@ -93,6 +93,7 @@ os.makedirs(outdir, exist_ok=True)
 os.makedirs(f"{outdir}/summaryPlots/", exist_ok=True)
 os.makedirs(f"{outdir}/summaryPlots/tot/", exist_ok=True)
 os.makedirs(f"{outdir}/summaryPlots/energy/", exist_ok=True)
+os.makedirs(f"{outdir}/summaryPlots/offset/", exist_ok=True)
 os.makedirs(f"{outdir}/summaryPlots/timeResolution/", exist_ok=True)
 os.makedirs(f"{outdir}/summaryPlots/timeResolution/fits/", exist_ok=True)
 
@@ -152,18 +153,20 @@ g_energy_vs_bar = {} # g [l, vov, peak]
 
 g_deltaT_energyRatioCorr_vs_th  = {} # g [bar, vov, energyBin] 
 g_deltaT_energyRatioCorr_vs_vov  = {} # g [bar, th, energyBin] 
-g_deltaT_energyRatioCorr_vs_bar = {} # g [viv, thr, energyBin] 
+g_deltaT_energyRatioCorr_vs_bar = {} # g [vov, thr, energyBin] 
 
 g_deltaT_totRatioCorr_vs_th  = {} # g [bar, vov, energyBin] 
 g_deltaT_totRatioCorr_vs_vov  = {} # g [bar, th, energyBin] 
-g_deltaT_totRatioCorr_vs_bar = {} # g [viv, thr, energyBin] 
+g_deltaT_totRatioCorr_vs_bar = {} # g [vov, thr, energyBin] 
 
 g_deltaT_energyRatioCorr_totRatioCorr_vs_th  = {} # g [bar, vov, energyBin] 
 g_deltaT_energyRatioCorr_totRatioCorr_vs_vov  = {} # g [bar, th, energyBin] 
-g_deltaT_energyRatioCorr_totRatioCorr_vs_bar = {} # g [viv, thr, energyBin] 
+g_deltaT_energyRatioCorr_totRatioCorr_vs_bar = {} # g [vov, thr, energyBin] 
 
 g_deltaT_energyRatioCorr_bestTh_vs_vov = {} # g [bar, energyBin] 
 g_deltaT_energyRatioCorr_bestTh_vs_bar = {} # g [vov, energyBin] 
+
+g_deltaT_mean_energyRatioCorr_bestTh_vs_bar = {} # g [vov, energyBin] 
 
 g_deltaT_totRatioCorr_bestTh_vs_vov = {} # g [bar, energyBin] 
 g_deltaT_totRatioCorr_bestTh_vs_bar = {} # g [vov, energyBin] 
@@ -220,6 +223,7 @@ for bar in bars:
 for vov in Vovs:
     for enBin in enBins: 
         g_deltaT_energyRatioCorr_bestTh_vs_bar[vov, enBin] = ROOT.TGraphErrors()
+        g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin] = ROOT.TGraphErrors()
         g_deltaT_totRatioCorr_bestTh_vs_bar[vov, enBin] = ROOT.TGraphErrors()
         g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_bar[vov, enBin] = ROOT.TGraphErrors()
 for enBin in enBins: 
@@ -235,187 +239,192 @@ for enBin in enBins:
 # ------------------------------------------------------------
 print("\nRead histograms from step2")
 for label in label_list:
-   print(" - Processing ", label)
-   inputFile = None
-   file_path = f"{inputdir}/moduleCharacterization_step2_{label}.root"
-   inputFile = ROOT.TFile.Open(file_path)
-   for bar in bars:
-      for l in ['L','R','L-R']:
-         for vov in Vovs:
-            for thr in thresholds:
-               # --- tot vs thr, Vov, bar
-               if ( inputFile.GetListOfKeys().Contains('h1_tot_bar%02d%s_Vov%.02f_th%02d'%(bar, l, vov, thr)) ):
-                  h1_tot = inputFile.Get('h1_tot_bar%02d%s_Vov%.02f_th%02d'%(bar, l, vov, thr))
-                  if (h1_tot is None or h1_tot.GetEntries()==0): continue
-                  max1 = h1_tot.GetBinCenter(h1_tot.GetMaximumBin())
-                  h1_tot.GetXaxis().SetRangeUser(0.25*max1,2.*max1)
-                  fitFunc = ROOT.TF1('fitFunc','gaus',max1-0.05*max1,max1+0.05*max1)
-                  h1_tot.Fit('fitFunc','QNRS+')
-                  h1_tot.Fit('fitFunc','QNS+','', fitFunc.GetParameter(1)-fitFunc.GetParameter(2), fitFunc.GetParameter(1)+fitFunc.GetParameter(2))
-                  g_tot_vs_th[bar, l, vov].SetPoint(g_tot_vs_th[bar, l, vov].GetN(), thr, fitFunc.GetParameter(1) )
-                  g_tot_vs_th[bar, l, vov].SetPointError(g_tot_vs_th[bar, l, vov].GetN()-1, 0, fitFunc.GetParError(1) )
-                  g_tot_vs_vov[bar, l, thr].SetPoint(g_tot_vs_vov[bar, l, thr].GetN(), VovsEff[vov], fitFunc.GetParameter(1) )
-                  g_tot_vs_vov[bar, l, thr].SetPointError(g_tot_vs_vov[bar, l, thr].GetN()-1, 0, fitFunc.GetParError(1) )
-                  if (thr == thRef):
-                     g_tot_vs_bar[l, vov, thr].SetPoint(g_tot_vs_bar[l, vov, thr].GetN(), bar, fitFunc.GetParameter(1) )    
-                     g_tot_vs_bar[l, vov, thr].SetPointError(g_tot_vs_bar[l, vov, thr].GetN()-1, 0, fitFunc.GetParError(1) )                    
-                  # --- energy vs thr, Vov, bar
-                  if ( inputFile.GetListOfKeys().Contains('h1_energy_bar%02d%s_Vov%.02f_th%02d'%(bar, l, vov, thr)) ):
-                     h1_energy = inputFile.Get('h1_energy_bar%02d%s_Vov%.02f_th%02d'%(bar, l, vov, thr))
-                     if ( h1_energy is None or h1_energy.GetEntries()==0): continue
-                     energyPeak = {}
-                     if (source == 'Na22'):
-                        for peak in peaks:
-                           energyPeak[peak] = [h1_energy.GetFunction('fitFunc_%d'%peak).GetParameter(1), h1_energy.GetFunction('fitFunc_%d'%peak).GetParError(1)]
-                     elif ( source == 'Laser'):
-                        fitFunc = ROOT.TF1('fitFunc','gaus',0, 1000)
-                        h1_energy.Fit('fitFunc','QNRS+')
-                        h1_energy.Fit('fitFunc','QNS+','', fitFunc.GetParameter(1)-fitFunc.GetParameter(2), fitFunc.GetParameter(1)+fitFunc.GetParameter(2))
-                        for peak in peaks:
-                           energyPeak[peak] = [ fitFunc.GetParameter(1), fitFunc.GetParError(1)]
-                     elif ( source == 'TB'):
-                        fitFunc = ROOT.TF1('f_landau_bar%02d%s_Vov%.02f_vth1_%02d'%(bar, l, vov, thr), '[0]*TMath::Landau(x,[1],[2])', 0,1000.)
-                        if args.minEnergyFile !=  None:
-                            minE = energyMin[(bar,vov)]
-                        else:
-                            minE = 50
-                        h1_energy.GetXaxis().SetRangeUser(minE,800)
-                        emax = h1_energy.GetBinCenter(h1_energy.GetMaximumBin())
-                        fitFunc.SetParameters(10, emax, 30)
-                        fitFunc.SetRange(0.8*emax, 1.5*emax)
-                        h1_energy.Fit(fitFunc,'QR')
-                        for peak in peaks:
-                           energyPeak[peak] = [fitFunc.GetParameter(1), fitFunc.GetParError(1)]
-                     for peak in peaks:
-                        g_energy_vs_th[bar, l, vov, peak].SetPoint(g_energy_vs_th[bar, l, vov, peak].GetN(), thr, energyPeak[peak][0] )
-                        g_energy_vs_th[bar, l, vov, peak].SetPointError(g_energy_vs_th[bar, l, vov, peak].GetN()-1, 0, energyPeak[peak][1])                        
-                        g_energy_vs_vov[bar, l, thr, peak].SetPoint(g_energy_vs_vov[bar, l, thr, peak].GetN(), VovsEff[vov], energyPeak[peak][0] )
-                        g_energy_vs_vov[bar, l, thr, peak].SetPointError(g_energy_vs_vov[bar, l, thr, peak].GetN()-1, 0, energyPeak[peak][1] )                        
+    print(" - Processing ", label)
+    inputFile = None
+    file_path = f"{inputdir}/moduleCharacterization_step2_{label}.root"
+    inputFile = ROOT.TFile.Open(file_path)
+    for bar in bars:
+        for l in ['L','R','L-R']:
+            for vov in Vovs:
+                for thr in thresholds:
+                    # --- tot vs thr, Vov, bar
+                    if ( inputFile.GetListOfKeys().Contains('h1_tot_bar%02d%s_Vov%.02f_th%02d'%(bar, l, vov, thr)) ):
+                        h1_tot = inputFile.Get('h1_tot_bar%02d%s_Vov%.02f_th%02d'%(bar, l, vov, thr))
+                        if (h1_tot is None or h1_tot.GetEntries()==0): continue
+                        max1 = h1_tot.GetBinCenter(h1_tot.GetMaximumBin())
+                        h1_tot.GetXaxis().SetRangeUser(0.25*max1,2.*max1)
+                        fitFunc = ROOT.TF1('fitFunc','gaus',max1-0.05*max1,max1+0.05*max1)
+                        h1_tot.Fit('fitFunc','QNRS+')
+                        h1_tot.Fit('fitFunc','QNS+','', fitFunc.GetParameter(1)-fitFunc.GetParameter(2), fitFunc.GetParameter(1)+fitFunc.GetParameter(2))
+                        g_tot_vs_th[bar, l, vov].SetPoint(g_tot_vs_th[bar, l, vov].GetN(), thr, fitFunc.GetParameter(1) )
+                        g_tot_vs_th[bar, l, vov].SetPointError(g_tot_vs_th[bar, l, vov].GetN()-1, 0, fitFunc.GetParError(1) )
+                        g_tot_vs_vov[bar, l, thr].SetPoint(g_tot_vs_vov[bar, l, thr].GetN(), VovsEff[vov], fitFunc.GetParameter(1) )
+                        g_tot_vs_vov[bar, l, thr].SetPointError(g_tot_vs_vov[bar, l, thr].GetN()-1, 0, fitFunc.GetParError(1) )
                         if (thr == thRef):
-                           g_energy_vs_bar[l, vov, thr, peak].SetPoint(g_energy_vs_bar[l, vov, thr, peak].GetN(), bar, energyPeak[peak][0] )
-                           g_energy_vs_bar[l, vov, thr, peak].SetPointError(g_energy_vs_bar[l, vov, thr, peak].GetN()-1, 0, energyPeak[peak][1] )
+                            g_tot_vs_bar[l, vov, thr].SetPoint(g_tot_vs_bar[l, vov, thr].GetN(), bar, fitFunc.GetParameter(1) )    
+                            g_tot_vs_bar[l, vov, thr].SetPointError(g_tot_vs_bar[l, vov, thr].GetN()-1, 0, fitFunc.GetParError(1) )                    
+                    # --- energy vs thr, Vov, bar
+                    if ( inputFile.GetListOfKeys().Contains('h1_energy_bar%02d%s_Vov%.02f_th%02d'%(bar, l, vov, thr)) ):
+                        h1_energy = inputFile.Get('h1_energy_bar%02d%s_Vov%.02f_th%02d'%(bar, l, vov, thr))
+                        if ( h1_energy is None or h1_energy.GetEntries()==0): continue
+                        energyPeak = {}
+                        if (source == 'Na22'):
+                            for peak in peaks:
+                                energyPeak[peak] = [h1_energy.GetFunction('fitFunc_%d'%peak).GetParameter(1), h1_energy.GetFunction('fitFunc_%d'%peak).GetParError(1)]
+                        elif ( source == 'Laser'):
+                            fitFunc = ROOT.TF1('fitFunc','gaus',0, 1000)
+                            h1_energy.Fit('fitFunc','QNRS+')
+                            h1_energy.Fit('fitFunc','QNS+','', fitFunc.GetParameter(1)-fitFunc.GetParameter(2), fitFunc.GetParameter(1)+fitFunc.GetParameter(2))
+                            for peak in peaks:
+                                energyPeak[peak] = [ fitFunc.GetParameter(1), fitFunc.GetParError(1)]
+                        elif ( source == 'TB'):
+                            fitFunc = ROOT.TF1('f_landau_bar%02d%s_Vov%.02f_vth1_%02d'%(bar, l, vov, thr), '[0]*TMath::Landau(x,[1],[2])', 0,1000.)
+                            if args.minEnergyFile !=  None:
+                                minE = energyMin[(bar,vov)]
+                            else:
+                                minE = 50
+                            h1_energy.GetXaxis().SetRangeUser(minE,800)
+                            emax = h1_energy.GetBinCenter(h1_energy.GetMaximumBin())
+                            fitFunc.SetParameters(10, emax, 30)
+                            fitFunc.SetRange(0.8*emax, 1.5*emax)
+                            h1_energy.Fit(fitFunc,'QR')
+                            for peak in peaks:
+                                energyPeak[peak] = [fitFunc.GetParameter(1), fitFunc.GetParError(1)]
+                        for peak in peaks:
+                            g_energy_vs_th[bar, l, vov, peak].SetPoint(g_energy_vs_th[bar, l, vov, peak].GetN(), thr, energyPeak[peak][0] )
+                            g_energy_vs_th[bar, l, vov, peak].SetPointError(g_energy_vs_th[bar, l, vov, peak].GetN()-1, 0, energyPeak[peak][1])                        
+                            g_energy_vs_vov[bar, l, thr, peak].SetPoint(g_energy_vs_vov[bar, l, thr, peak].GetN(), VovsEff[vov], energyPeak[peak][0] )
+                            g_energy_vs_vov[bar, l, thr, peak].SetPointError(g_energy_vs_vov[bar, l, thr, peak].GetN()-1, 0, energyPeak[peak][1] )                        
+                            if (thr == thRef):
+                                g_energy_vs_bar[l, vov, thr, peak].SetPoint(g_energy_vs_bar[l, vov, thr, peak].GetN(), bar, energyPeak[peak][0] )
+                                g_energy_vs_bar[l, vov, thr, peak].SetPointError(g_energy_vs_bar[l, vov, thr, peak].GetN()-1, 0, energyPeak[peak][1] )
                         
-   # -- tRes vs Vov, thr, bar
-   bestRes_totCorr = {}
-   bestRes_energyCorr = {}
-   bestRes_energyCorr_totCorr = {}   
-   for bar in bars:
-      for vov in Vovs:
-         for enBin in enBins:    
-            bestRes_totCorr[bar, vov, enBin] = [9999, 9999]
-            bestRes_energyCorr[bar, vov, enBin] = [9999, 9999]
-            bestRes_energyCorr_totCorr[bar, vov, enBin] = [9999, 9999]
-   for bar in bars:
-      for vov in Vovs:
-         if (bar not in goodBars[vov]): continue
-         for thr in thresholds: 
-            tRes_energyCorr = {}
-            tRes_totCorr = {}
-            tRes_energyCorr_totCorr = {}
-            for enBin in enBins:
-               # Note: phaseCorr is hereby implicit in the name 
-               h1_deltaT_totCorr    = inputFile.Get('h1_deltaT_totRatioPhaseCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d'%(bar, vov, thr, enBin))
-               if not isinstance(h1_deltaT_totCorr, ROOT.TH1F):
-                   h1_deltaT_totCorr = None
-               h1_deltaT_energyCorr = inputFile.Get('h1_deltaT_energyRatioPhaseCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d'%(bar, vov, thr, enBin))
-               if not isinstance(h1_deltaT_energyCorr, ROOT.TH1F):
-                   h1_deltaT_energyCorr = None
-               h1_deltaT_energyCorr_totCorr = inputFile.Get('h1_deltaT_energyRatioCorr_totRatioCorr_phaseCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d'%(bar, vov, thr, enBin))
-               if not isinstance(h1_deltaT_energyCorr_totCorr, ROOT.TH1F):
-                   h1_deltaT_energyCorr_totCorr = None
+    # -- tRes vs Vov, thr, bar
+    bestRes_totCorr = {}
+    bestRes_energyCorr = {}
+    bestRes_energyCorr_totCorr = {}   
+    for bar in bars:
+       for vov in Vovs:
+          for enBin in enBins:    
+             bestRes_totCorr[bar, vov, enBin] = [9999, 9999]
+             bestRes_energyCorr[bar, vov, enBin] = [9999, 9999]
+             bestRes_energyCorr_totCorr[bar, vov, enBin] = [9999, 9999]
+    for bar in bars:
+       for vov in Vovs:
+          if (bar not in goodBars[vov]): continue
+          for thr in thresholds: 
+             tRes_energyCorr = {}
+             tRes_totCorr = {}
+             tRes_energyCorr_totCorr = {}
+             for enBin in enBins:
+                # Note: phaseCorr is hereby implicit in the name 
+                h1_deltaT_totCorr    = inputFile.Get('h1_deltaT_totRatioPhaseCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d'%(bar, vov, thr, enBin))
+                if not isinstance(h1_deltaT_totCorr, ROOT.TH1F):
+                    h1_deltaT_totCorr = None
+                h1_deltaT_energyCorr = inputFile.Get('h1_deltaT_energyRatioPhaseCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d'%(bar, vov, thr, enBin))
+                if not isinstance(h1_deltaT_energyCorr, ROOT.TH1F):
+                    h1_deltaT_energyCorr = None
+                h1_deltaT_energyCorr_totCorr = inputFile.Get('h1_deltaT_energyRatioCorr_totRatioCorr_phaseCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d'%(bar, vov, thr, enBin))
+                if not isinstance(h1_deltaT_energyCorr_totCorr, ROOT.TH1F):
+                    h1_deltaT_energyCorr_totCorr = None
+
+                 # --- totRatio + phase corr
+                if (h1_deltaT_totCorr is None): continue
+                if (h1_deltaT_totCorr.GetEntries() < 200 ): continue
+                tRes_totCorr[enBin] = getTimeResolution(h1_deltaT_totCorr)
+                if ( tRes_totCorr[enBin][0] < bestRes_totCorr[bar, vov, enBin][0]):
+                   bestRes_totCorr[bar, vov, enBin] = tRes_totCorr[enBin]
+                ctemp = ROOT.TCanvas()
+                h1_deltaT_totCorr.GetYaxis().SetRangeUser(0, h1_deltaT_totCorr.GetBinContent(h1_deltaT_totCorr.GetMaximumBin())*1.2)                
+                h1_deltaT_totCorr.Draw()
+
+                # --- energyRatio + phase corr
+                if (h1_deltaT_energyCorr is None): continue
+                if (h1_deltaT_energyCorr.GetEntries() < 200 ): continue
+                tRes_energyCorr[enBin] = getTimeResolution(h1_deltaT_energyCorr)
+                if ( tRes_energyCorr[enBin][0] < bestRes_energyCorr[bar, vov, enBin][0] ):
+                   bestRes_energyCorr[bar, vov, enBin] = tRes_energyCorr[enBin]
+                ctemp = ROOT.TCanvas()
+                h1_deltaT_energyCorr.GetYaxis().SetRangeUser(0, h1_deltaT_energyCorr.GetBinContent(h1_deltaT_energyCorr.GetMaximumBin())*1.2)                
+                h1_deltaT_energyCorr.Draw()                
+                ctemp.SaveAs(outdir+'/summaryPlots/timeResolution/fits/'+'/c_h1_deltaT_energyRatioCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d.png'%(bar, vov, thr, enBin))
 
                 # --- totRatio + phase corr
-               if (h1_deltaT_totCorr is None): continue
-               if (h1_deltaT_totCorr.GetEntries() < 200 ): continue
-               tRes_totCorr[enBin] = getTimeResolution(h1_deltaT_totCorr)
-               if ( tRes_totCorr[enBin][0] < bestRes_totCorr[bar, vov, enBin][0]):
-                  bestRes_totCorr[bar, vov, enBin] = tRes_totCorr[enBin]
-               ctemp = ROOT.TCanvas()
-               h1_deltaT_totCorr.GetYaxis().SetRangeUser(0, h1_deltaT_totCorr.GetBinContent(h1_deltaT_totCorr.GetMaximumBin())*1.2)                
-               h1_deltaT_totCorr.Draw()
+                if (h1_deltaT_totCorr is None): continue
+                if (h1_deltaT_totCorr.GetEntries() < 200 ): continue
+                tRes_totCorr[enBin] = getTimeResolution(h1_deltaT_totCorr)
+                if ( tRes_totCorr[enBin][0] < bestRes_totCorr[bar, vov, enBin][0]):
+                   bestRes_totCorr[bar, vov, enBin] = tRes_totCorr[enBin]
+                ctemp = ROOT.TCanvas()
+                h1_deltaT_totCorr.GetYaxis().SetRangeUser(0, h1_deltaT_totCorr.GetBinContent(h1_deltaT_totCorr.GetMaximumBin())*1.2)                
+                h1_deltaT_totCorr.Draw()                
+                ctemp.SaveAs(outdir+'/summaryPlots/timeResolution/fits/'+'/c_h1_deltaT_totRatioCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d.png'%(bar, vov, thr, enBin))
 
-               # --- energyRatio + phase corr
-               if (h1_deltaT_energyCorr is None): continue
-               if (h1_deltaT_energyCorr.GetEntries() < 200 ): continue
-               tRes_energyCorr[enBin] = getTimeResolution(h1_deltaT_energyCorr)
-               if ( tRes_energyCorr[enBin][0] < bestRes_energyCorr[bar, vov, enBin][0] ):
-                  bestRes_energyCorr[bar, vov, enBin] = tRes_energyCorr[enBin]
-               ctemp = ROOT.TCanvas()
-               h1_deltaT_energyCorr.GetYaxis().SetRangeUser(0, h1_deltaT_energyCorr.GetBinContent(h1_deltaT_energyCorr.GetMaximumBin())*1.2)                
-               h1_deltaT_energyCorr.Draw()                
-               ctemp.SaveAs(outdir+'/summaryPlots/timeResolution/fits/'+'/c_h1_deltaT_energyRatioCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d.png'%(bar, vov, thr, enBin))
+                # --- energyRatio + totRatio + phase corr
+                if (h1_deltaT_energyCorr_totCorr is None): continue
+                if (h1_deltaT_energyCorr_totCorr.GetEntries() < 200 ): continue
+                tRes_energyCorr_totCorr[enBin] = getTimeResolution(h1_deltaT_energyCorr_totCorr)
+                if ( tRes_energyCorr_totCorr[enBin][0] < bestRes_energyCorr_totCorr[bar, vov, enBin][0]):
+                   bestRes_energyCorr_totCorr[bar, vov, enBin] = tRes_energyCorr_totCorr[enBin]
+                ctemp = ROOT.TCanvas()
+                h1_deltaT_energyCorr_totCorr.GetYaxis().SetRangeUser(0, h1_deltaT_energyCorr_totCorr.GetBinContent(h1_deltaT_energyCorr_totCorr.GetMaximumBin())*1.2)
+                h1_deltaT_energyCorr_totCorr.Draw()                
+                ctemp.SaveAs(outdir+'/summaryPlots/timeResolution/fits/'+'/c_h1_deltaT_energyRatioCorr_totRatioCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d.png'%(bar, vov, thr, enBin))
 
-               # --- totRatio + phase corr
-               if (h1_deltaT_totCorr is None): continue
-               if (h1_deltaT_totCorr.GetEntries() < 200 ): continue
-               tRes_totCorr[enBin] = getTimeResolution(h1_deltaT_totCorr)
-               if ( tRes_totCorr[enBin][0] < bestRes_totCorr[bar, vov, enBin][0]):
-                  bestRes_totCorr[bar, vov, enBin] = tRes_totCorr[enBin]
-               ctemp = ROOT.TCanvas()
-               h1_deltaT_totCorr.GetYaxis().SetRangeUser(0, h1_deltaT_totCorr.GetBinContent(h1_deltaT_totCorr.GetMaximumBin())*1.2)                
-               h1_deltaT_totCorr.Draw()                
-               ctemp.SaveAs(outdir+'/summaryPlots/timeResolution/fits/'+'/c_h1_deltaT_totRatioCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d.png'%(bar, vov, thr, enBin))
+                # --- graphs vs threshold
+                g_deltaT_energyRatioCorr_vs_th[bar, vov, enBin].SetPoint(g_deltaT_energyRatioCorr_vs_th[bar, vov, enBin].GetN(), thr, tRes_energyCorr[enBin][0]/kscale )
+                g_deltaT_energyRatioCorr_vs_th[bar, vov, enBin].SetPointError(g_deltaT_energyRatioCorr_vs_th[bar, vov, enBin].GetN()-1, 0, tRes_energyCorr[enBin][1]/kscale)
+                g_deltaT_totRatioCorr_vs_th[bar, vov, enBin].SetPoint(g_deltaT_totRatioCorr_vs_th[bar, vov, enBin].GetN(), thr, tRes_totCorr[enBin][0]/kscale )
+                g_deltaT_totRatioCorr_vs_th[bar, vov, enBin].SetPointError(g_deltaT_totRatioCorr_vs_th[bar, vov, enBin].GetN()-1, 0, tRes_totCorr[enBin][1]/kscale)
+                g_deltaT_energyRatioCorr_totRatioCorr_vs_th[bar, vov, enBin].SetPoint(g_deltaT_energyRatioCorr_totRatioCorr_vs_th[bar, vov, enBin].GetN(), thr, tRes_energyCorr_totCorr[enBin][0]/kscale )
+                g_deltaT_energyRatioCorr_totRatioCorr_vs_th[bar, vov, enBin].SetPointError(g_deltaT_energyRatioCorr_totRatioCorr_vs_th[bar, vov, enBin].GetN()-1, 0, tRes_energyCorr_totCorr[enBin][1]/kscale)               
 
-               # --- energyRatio + totRatio + phase corr
-               if (h1_deltaT_energyCorr_totCorr is None): continue
-               if (h1_deltaT_energyCorr_totCorr.GetEntries() < 200 ): continue
-               tRes_energyCorr_totCorr[enBin] = getTimeResolution(h1_deltaT_energyCorr_totCorr)
-               if ( tRes_energyCorr_totCorr[enBin][0] < bestRes_energyCorr_totCorr[bar, vov, enBin][0]):
-                  bestRes_energyCorr_totCorr[bar, vov, enBin] = tRes_energyCorr_totCorr[enBin]
-               ctemp = ROOT.TCanvas()
-               h1_deltaT_energyCorr_totCorr.GetYaxis().SetRangeUser(0, h1_deltaT_energyCorr_totCorr.GetBinContent(h1_deltaT_energyCorr_totCorr.GetMaximumBin())*1.2)
-               h1_deltaT_energyCorr_totCorr.Draw()                
-               ctemp.SaveAs(outdir+'/summaryPlots/timeResolution/fits/'+'/c_h1_deltaT_energyRatioCorr_totRatioCorr_bar%02dL-R_Vov%.02f_th%02d_energyBin%02d.png'%(bar, vov, thr, enBin))
+                # --- graphs vs Vov
+                g_deltaT_energyRatioCorr_vs_vov[bar, thr, enBin].SetPoint(g_deltaT_energyRatioCorr_vs_vov[bar, thr, enBin].GetN(), VovsEff[vov], tRes_energyCorr[enBin][0]/kscale )
+                g_deltaT_energyRatioCorr_vs_vov[bar, thr, enBin].SetPointError(g_deltaT_energyRatioCorr_vs_vov[bar, thr, enBin].GetN()-1, 0, tRes_energyCorr[enBin][1]/kscale)
+                g_deltaT_totRatioCorr_vs_vov[bar, thr, enBin].SetPoint(g_deltaT_totRatioCorr_vs_vov[bar, thr, enBin].GetN(), VovsEff[vov], tRes_totCorr[enBin][0]/kscale )
+                g_deltaT_totRatioCorr_vs_vov[bar, thr, enBin].SetPointError(g_deltaT_totRatioCorr_vs_vov[bar, thr, enBin].GetN()-1, 0, tRes_totCorr[enBin][1]/kscale)
+                g_deltaT_energyRatioCorr_totRatioCorr_vs_vov[bar, thr, enBin].SetPoint(g_deltaT_energyRatioCorr_totRatioCorr_vs_vov[bar, thr, enBin].GetN(), VovsEff[vov], tRes_energyCorr_totCorr[enBin][0]/kscale )
+                g_deltaT_energyRatioCorr_totRatioCorr_vs_vov[bar, thr, enBin].SetPointError(g_deltaT_energyRatioCorr_totRatioCorr_vs_vov[bar, thr, enBin].GetN()-1, 0, tRes_energyCorr_totCorr[enBin][1]/kscale)
+                if (thr == thRef):
+                   g_deltaT_energyRatioCorr_vs_bar[vov, thr, enBin].SetPoint(g_deltaT_energyRatioCorr_vs_bar[vov, thr, enBin].GetN(), bar, tRes_energyCorr[enBin][0]/kscale )
+                   g_deltaT_energyRatioCorr_vs_bar[vov, thr, enBin].SetPointError(g_deltaT_energyRatioCorr_vs_bar[vov, thr, enBin].GetN()-1, 0, tRes_energyCorr[enBin][1]/kscale)
 
-               # --- graphs vs threshold
-               g_deltaT_energyRatioCorr_vs_th[bar, vov, enBin].SetPoint(g_deltaT_energyRatioCorr_vs_th[bar, vov, enBin].GetN(), thr, tRes_energyCorr[enBin][0]/kscale )
-               g_deltaT_energyRatioCorr_vs_th[bar, vov, enBin].SetPointError(g_deltaT_energyRatioCorr_vs_th[bar, vov, enBin].GetN()-1, 0, tRes_energyCorr[enBin][1]/kscale)
-               g_deltaT_totRatioCorr_vs_th[bar, vov, enBin].SetPoint(g_deltaT_totRatioCorr_vs_th[bar, vov, enBin].GetN(), thr, tRes_totCorr[enBin][0]/kscale )
-               g_deltaT_totRatioCorr_vs_th[bar, vov, enBin].SetPointError(g_deltaT_totRatioCorr_vs_th[bar, vov, enBin].GetN()-1, 0, tRes_totCorr[enBin][1]/kscale)
-               g_deltaT_energyRatioCorr_totRatioCorr_vs_th[bar, vov, enBin].SetPoint(g_deltaT_energyRatioCorr_totRatioCorr_vs_th[bar, vov, enBin].GetN(), thr, tRes_energyCorr_totCorr[enBin][0]/kscale )
-               g_deltaT_energyRatioCorr_totRatioCorr_vs_th[bar, vov, enBin].SetPointError(g_deltaT_energyRatioCorr_totRatioCorr_vs_th[bar, vov, enBin].GetN()-1, 0, tRes_energyCorr_totCorr[enBin][1]/kscale)               
-               
-               # --- graphs vs Vov
-               g_deltaT_energyRatioCorr_vs_vov[bar, thr, enBin].SetPoint(g_deltaT_energyRatioCorr_vs_vov[bar, thr, enBin].GetN(), VovsEff[vov], tRes_energyCorr[enBin][0]/kscale )
-               g_deltaT_energyRatioCorr_vs_vov[bar, thr, enBin].SetPointError(g_deltaT_energyRatioCorr_vs_vov[bar, thr, enBin].GetN()-1, 0, tRes_energyCorr[enBin][1]/kscale)
-               g_deltaT_totRatioCorr_vs_vov[bar, thr, enBin].SetPoint(g_deltaT_totRatioCorr_vs_vov[bar, thr, enBin].GetN(), VovsEff[vov], tRes_totCorr[enBin][0]/kscale )
-               g_deltaT_totRatioCorr_vs_vov[bar, thr, enBin].SetPointError(g_deltaT_totRatioCorr_vs_vov[bar, thr, enBin].GetN()-1, 0, tRes_totCorr[enBin][1]/kscale)
-               g_deltaT_energyRatioCorr_totRatioCorr_vs_vov[bar, thr, enBin].SetPoint(g_deltaT_energyRatioCorr_totRatioCorr_vs_vov[bar, thr, enBin].GetN(), VovsEff[vov], tRes_energyCorr_totCorr[enBin][0]/kscale )
-               g_deltaT_energyRatioCorr_totRatioCorr_vs_vov[bar, thr, enBin].SetPointError(g_deltaT_energyRatioCorr_totRatioCorr_vs_vov[bar, thr, enBin].GetN()-1, 0, tRes_energyCorr_totCorr[enBin][1]/kscale)
-               if (thr == thRef):
-                  g_deltaT_energyRatioCorr_vs_bar[vov, thr, enBin].SetPoint(g_deltaT_energyRatioCorr_vs_bar[vov, thr, enBin].GetN(), bar, tRes_energyCorr[enBin][0]/kscale )
-                  g_deltaT_energyRatioCorr_vs_bar[vov, thr, enBin].SetPointError(g_deltaT_energyRatioCorr_vs_bar[vov, thr, enBin].GetN()-1, 0, tRes_energyCorr[enBin][1]/kscale)
-                  g_deltaT_totRatioCorr_vs_bar[vov, thr, enBin].SetPoint(g_deltaT_totRatioCorr_vs_bar[vov, thr, enBin].GetN(), bar, tRes_totCorr[enBin][0]/kscale )
-                  g_deltaT_totRatioCorr_vs_bar[vov, thr, enBin].SetPointError(g_deltaT_totRatioCorr_vs_bar[vov, thr, enBin].GetN()-1, 0, tRes_totCorr[enBin][1]/kscale)
-                  # -- graphs at a fixed threshold
-                  g_deltaT_energyRatioCorr_refTh_vs_vov[bar, enBin].SetPoint(g_deltaT_energyRatioCorr_refTh_vs_vov[bar, enBin].GetN(), VovsEff[vov],tRes_energyCorr[enBin][0]/kscale )
-                  g_deltaT_energyRatioCorr_refTh_vs_vov[bar, enBin].SetPointError(g_deltaT_energyRatioCorr_refTh_vs_vov[bar, enBin].GetN()-1, 0, tRes_energyCorr[enBin][1]/kscale)
-                  g_deltaT_totRatioCorr_refTh_vs_vov[bar, enBin].SetPoint(g_deltaT_totRatioCorr_refTh_vs_vov[bar, enBin].GetN(), VovsEff[vov],tRes_totCorr[enBin][0]/kscale )
-                  g_deltaT_totRatioCorr_refTh_vs_vov[bar, enBin].SetPointError(g_deltaT_totRatioCorr_refTh_vs_vov[bar, enBin].GetN()-1, 0, tRes_totCorr[enBin][1]/kscale)
-                                  
-         # --- graphs at best Th
-         for enBin in enBins:               
-            # -- tRes vs Vov at the best threshold    
-            if (bestRes_energyCorr[bar, vov, enBin][0]!= 9999):
-               g_deltaT_energyRatioCorr_bestTh_vs_vov[bar, enBin].SetPoint(g_deltaT_energyRatioCorr_bestTh_vs_vov[bar, enBin].GetN(), VovsEff[vov], (bestRes_energyCorr[bar, vov, enBin][0])/kscale )
-               g_deltaT_energyRatioCorr_bestTh_vs_vov[bar, enBin].SetPointError(g_deltaT_energyRatioCorr_bestTh_vs_vov[bar, enBin].GetN()-1, 0, (bestRes_energyCorr[bar, vov, enBin][1])/kscale)
-            if (bestRes_totCorr[bar, vov, enBin][0]!= 9999): 
-               g_deltaT_totRatioCorr_bestTh_vs_vov[bar, enBin].SetPoint(g_deltaT_totRatioCorr_bestTh_vs_vov[bar, enBin].GetN(), VovsEff[vov], (bestRes_totCorr[bar, vov, enBin][0])/kscale )
-               g_deltaT_totRatioCorr_bestTh_vs_vov[bar, enBin].SetPointError(g_deltaT_totRatioCorr_bestTh_vs_vov[bar, enBin].GetN()-1, 0, (bestRes_totCorr[bar, vov, enBin][1])/kscale)
-            if (bestRes_energyCorr_totCorr[bar, vov, enBin][0]!= 9999):              
-               g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_vov[bar, enBin].SetPoint(g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_vov[bar, enBin].GetN(), VovsEff[vov], (bestRes_energyCorr_totCorr[bar, vov, enBin][0])/kscale )
-               g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_vov[bar, enBin].SetPointError(g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_vov[bar, enBin].GetN()-1, 0, (bestRes_energyCorr_totCorr[bar, vov, enBin][1])/kscale)
+                   g_deltaT_totRatioCorr_vs_bar[vov, thr, enBin].SetPoint(g_deltaT_totRatioCorr_vs_bar[vov, thr, enBin].GetN(), bar, tRes_totCorr[enBin][2] )
+                   g_deltaT_totRatioCorr_vs_bar[vov, thr, enBin].SetPointError(g_deltaT_totRatioCorr_vs_bar[vov, thr, enBin].GetN()-1, 0, tRes_totCorr[enBin][3])
 
-            # -- tRes vs bar at the best threshold
-            if (bestRes_energyCorr[bar, vov, enBin][0]!= 9999):
-               g_deltaT_energyRatioCorr_bestTh_vs_bar[vov, enBin].SetPoint(g_deltaT_energyRatioCorr_bestTh_vs_bar[vov, enBin].GetN(), bar, (bestRes_energyCorr[bar, vov, enBin][0])/kscale )
-               g_deltaT_energyRatioCorr_bestTh_vs_bar[vov, enBin].SetPointError(g_deltaT_energyRatioCorr_bestTh_vs_bar[vov, enBin].GetN()-1, 0, (bestRes_energyCorr[bar, vov, enBin][1])/kscale)
-            if (bestRes_totCorr[bar, vov, enBin][0]!= 9999): 
-               g_deltaT_totRatioCorr_bestTh_vs_bar[vov, enBin].SetPoint(g_deltaT_totRatioCorr_bestTh_vs_bar[vov, enBin].GetN(), bar, (bestRes_totCorr[bar, vov, enBin][0])/kscale )
-               g_deltaT_totRatioCorr_bestTh_vs_bar[vov, enBin].SetPointError(g_deltaT_totRatioCorr_bestTh_vs_bar[vov, enBin].GetN()-1, 0, (bestRes_totCorr[bar, vov, enBin][1])/kscale)
-            if (bestRes_energyCorr_totCorr[bar, vov, enBin][0]!= 9999):
-               g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_bar[vov, enBin].SetPoint(g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_bar[vov, enBin].GetN(), bar, (bestRes_energyCorr_totCorr[bar, vov, enBin][0])/kscale )
-               g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_bar[vov, enBin].SetPointError(g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_bar[vov, enBin].GetN()-1, 0, (bestRes_energyCorr_totCorr[bar, vov, enBin][1])/kscale)
+                   # -- graphs at a fixed threshold
+                   g_deltaT_energyRatioCorr_refTh_vs_vov[bar, enBin].SetPoint(g_deltaT_energyRatioCorr_refTh_vs_vov[bar, enBin].GetN(), VovsEff[vov],tRes_energyCorr[enBin][0]/kscale )
+                   g_deltaT_energyRatioCorr_refTh_vs_vov[bar, enBin].SetPointError(g_deltaT_energyRatioCorr_refTh_vs_vov[bar, enBin].GetN()-1, 0, tRes_energyCorr[enBin][1]/kscale)
+                   g_deltaT_totRatioCorr_refTh_vs_vov[bar, enBin].SetPoint(g_deltaT_totRatioCorr_refTh_vs_vov[bar, enBin].GetN(), VovsEff[vov],tRes_totCorr[enBin][0]/kscale )
+                   g_deltaT_totRatioCorr_refTh_vs_vov[bar, enBin].SetPointError(g_deltaT_totRatioCorr_refTh_vs_vov[bar, enBin].GetN()-1, 0, tRes_totCorr[enBin][1]/kscale)
+
+          # --- graphs at best Th
+          for enBin in enBins:               
+             # -- tRes vs Vov at the best threshold    
+             if (bestRes_energyCorr[bar, vov, enBin][0]!= 9999):
+                g_deltaT_energyRatioCorr_bestTh_vs_vov[bar, enBin].SetPoint(g_deltaT_energyRatioCorr_bestTh_vs_vov[bar, enBin].GetN(), VovsEff[vov], (bestRes_energyCorr[bar, vov, enBin][0])/kscale )
+                g_deltaT_energyRatioCorr_bestTh_vs_vov[bar, enBin].SetPointError(g_deltaT_energyRatioCorr_bestTh_vs_vov[bar, enBin].GetN()-1, 0, (bestRes_energyCorr[bar, vov, enBin][1])/kscale)
+             if (bestRes_totCorr[bar, vov, enBin][0]!= 9999): 
+                g_deltaT_totRatioCorr_bestTh_vs_vov[bar, enBin].SetPoint(g_deltaT_totRatioCorr_bestTh_vs_vov[bar, enBin].GetN(), VovsEff[vov], (bestRes_totCorr[bar, vov, enBin][0])/kscale )
+                g_deltaT_totRatioCorr_bestTh_vs_vov[bar, enBin].SetPointError(g_deltaT_totRatioCorr_bestTh_vs_vov[bar, enBin].GetN()-1, 0, (bestRes_totCorr[bar, vov, enBin][1])/kscale)
+             if (bestRes_energyCorr_totCorr[bar, vov, enBin][0]!= 9999):              
+                g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_vov[bar, enBin].SetPoint(g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_vov[bar, enBin].GetN(), VovsEff[vov], (bestRes_energyCorr_totCorr[bar, vov, enBin][0])/kscale )
+                g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_vov[bar, enBin].SetPointError(g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_vov[bar, enBin].GetN()-1, 0, (bestRes_energyCorr_totCorr[bar, vov, enBin][1])/kscale)
+
+             # -- tRes vs bar at the best threshold
+             if (bestRes_energyCorr[bar, vov, enBin][0]!= 9999):
+                g_deltaT_energyRatioCorr_bestTh_vs_bar[vov, enBin].SetPoint(g_deltaT_energyRatioCorr_bestTh_vs_bar[vov, enBin].GetN(), bar, (bestRes_energyCorr[bar, vov, enBin][0])/kscale )
+                g_deltaT_energyRatioCorr_bestTh_vs_bar[vov, enBin].SetPointError(g_deltaT_energyRatioCorr_bestTh_vs_bar[vov, enBin].GetN()-1, 0, (bestRes_energyCorr[bar, vov, enBin][1])/kscale)
+                # mean deltaT vs bar at the best th
+                g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].SetPoint(g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].GetN(), bar, (bestRes_energyCorr[bar, vov, enBin][2]) )
+                g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].SetPointError(g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].GetN()-1, 0, (bestRes_energyCorr[bar, vov, enBin][3]))            
+             if (bestRes_totCorr[bar, vov, enBin][0]!= 9999): 
+                g_deltaT_totRatioCorr_bestTh_vs_bar[vov, enBin].SetPoint(g_deltaT_totRatioCorr_bestTh_vs_bar[vov, enBin].GetN(), bar, (bestRes_totCorr[bar, vov, enBin][0])/kscale )
+                g_deltaT_totRatioCorr_bestTh_vs_bar[vov, enBin].SetPointError(g_deltaT_totRatioCorr_bestTh_vs_bar[vov, enBin].GetN()-1, 0, (bestRes_totCorr[bar, vov, enBin][1])/kscale)
+             if (bestRes_energyCorr_totCorr[bar, vov, enBin][0]!= 9999):
+                g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_bar[vov, enBin].SetPoint(g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_bar[vov, enBin].GetN(), bar, (bestRes_energyCorr_totCorr[bar, vov, enBin][0])/kscale )
+                g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_bar[vov, enBin].SetPointError(g_deltaT_energyRatioCorr_totRatioCorr_bestTh_vs_bar[vov, enBin].GetN()-1, 0, (bestRes_energyCorr_totCorr[bar, vov, enBin][1])/kscale)
                
 # - fill graphs with average tRes vs OV
 # --------------------------------------
@@ -785,9 +794,39 @@ for i, vov in enumerate(Vovs):
    ctres3.SaveAs(outdir+'/summaryPlots/timeResolution/'+ctres3.GetName()+'.pdf')    
    hPadT3.Delete()  
 
+
 print("\nSummary info: ")
 # -- time resolution vs bar at the best threshold
 for enBin in enBins:
+   # --- energyRatio corr - mean deltaT vs bar
+   ctres3 = ROOT.TCanvas('c_mean_deltaT_energyRatioCorr_bestTh_vs_bar_enBin%02d'%(enBin))
+   hPadT3 = ROOT.TH2F('hPadT3','', 100, -0.5, 15.5,100, -1000, 1000)
+   hPadT3.SetTitle("; bar; #mu_{#DeltaT} [ps]")
+   hPadT3.Draw()
+   ctres3.SetGridy()
+   leg = ROOT.TLegend(0.20, 0.90, 0.60, 0.70)
+   leg.SetBorderSize(0)
+   leg.SetFillStyle(0)
+   if (len(Vovs)>4): 
+      leg.SetNColumns(2);
+      leg.SetColumnSeparation(0.2);
+   for i, vov in enumerate(Vovs):
+      g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].SetMarkerStyle(24)
+      g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].SetMarkerColor(cols[vov])
+      g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].SetLineColor(cols[vov])
+      g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].Draw('psame')
+      fitRes = ROOT.TF1('fitRes','pol0',0,16)
+      g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].Fit(fitRes,'QRN')
+      print(' - energy corr. ===> Vov = %0.02f --> Average mean = %.00f, spread (RMS) of mean = %.01f %%'%(vov, fitRes.GetParameter(0), 100*g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].GetRMS(2)/g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].GetMean(2)))
+      leg.AddEntry(g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin], 'V_{OV}^{eff} = %.02f V'%VovsEff[vov], 'PL')
+      outfile.cd()
+      g_deltaT_mean_energyRatioCorr_bestTh_vs_bar[vov, enBin].Write('g_deltaT_mean_energyRatioCorr_bestTh_vs_bar_Vov%.02f_enBin%02d'%(vov, enBin))
+   leg.Draw()
+   latex.Draw('same')
+   ctres3.SaveAs(outdir+'/summaryPlots/offset/'+ctres3.GetName()+'.png')
+   ctres3.SaveAs(outdir+'/summaryPlots/offset/'+ctres3.GetName()+'.pdf')    
+   hPadT3.Delete()
+
    # --- energyRatio corr
    ctres3 = ROOT.TCanvas('c_tRes_energyRatioCorr_bestTh_vs_bar_enBin%02d'%(enBin))
    hPadT3 = ROOT.TH2F('hPadT3','', 100, -0.5, 15.5,100, tResMin,tResMax)
@@ -816,7 +855,7 @@ for enBin in enBins:
    ctres3.SaveAs(outdir+'/summaryPlots/timeResolution/'+ctres3.GetName()+'.png')
    ctres3.SaveAs(outdir+'/summaryPlots/timeResolution/'+ctres3.GetName()+'.pdf')    
    hPadT3.Delete()
-
+   
    # --- totRatio corr
    ctres3 = ROOT.TCanvas('c_tRes_totRatioCorr_bestTh_vs_bar_enBin%02d'%(enBin))
    hPadT4 = ROOT.TH2F('hPadT4','', 100, -0.5, 15.5,100, tResMin,tResMax)
