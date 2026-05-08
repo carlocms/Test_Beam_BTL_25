@@ -186,5 +186,5 @@ def getTimeResolution(h1_deltaT):
     h1_deltaT.Fit('fitFunc','QNRL')
     fitFunc.SetRange(fitFunc.GetParameter(1) - 2.5*fitFunc.GetParameter(2), fitFunc.GetParameter(1) + 2.5*fitFunc.GetParameter(2))
     h1_deltaT.Fit('fitFunc','QRSL+')
-    tRes = [ fitFunc.GetParameter(2),fitFunc.GetParError(2)]
+    tRes = [ fitFunc.GetParameter(2),fitFunc.GetParError(2), fitFunc.GetParameter(1),fitFunc.GetParError(1)]
     return tRes
