@@ -1,6 +1,9 @@
 #include "interface/AnalysisUtils.h"
 #include "interface/FitUtils.h"
 
+
+ClassImp(ModuleEventWithRefClass)
+
 void TrackProcess(float* cpu, float* mem, float* vsz, float* rss)
 {
   std::string dummy1, dummy2, dummy3, dummy4, dummy5;

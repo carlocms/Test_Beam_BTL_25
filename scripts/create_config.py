@@ -6,8 +6,8 @@ import sys
 from channelMapping import *
 
 # ------ MODIFY YOUR PATHS HERE -------
-Lab5015_path = "/eos/home-s/spalluot/MTD/TB_CERN_Sep25/Lab5015Analysis"
-plot_path = "/eos/home-s/spalluot/www/MTD/MTDTB_CERN_Sep25"
+Lab5015_path = "/eos/home-c/cgiraldi/TB_analysis/cgiraldi/Lab5015Analysis"
+plot_path = "/eos/home-c/cgiraldi/www/new/MTD/MTDTB_CERN_Sep25"
 # -------------------------------------
 
 

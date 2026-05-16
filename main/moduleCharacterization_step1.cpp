@@ -264,7 +264,11 @@ int main(int argc, char** argv)
   std::map<int,TH1F*> h1_energyR;
   std::map<int,TH1F*> h1_energyLR;
   std::map<int,TH1F*> h1_energyLR_ext;
+  std::map<int,TH1F*> h1_energy_ref_L;
+  std::map<int,TH1F*> h1_energy_ref_R;
   std::map<int,TCanvas*> c;
+  std::map<int,TCanvas*> c_L;
+  std::map<int,TCanvas*> c_R;  
   std::map<int,std::vector<float>*> rangesLR;
   std::map<int,bool> acceptEvent;
 
@@ -349,8 +353,28 @@ int main(int argc, char** argv)
 	  c[index] ->SetLogy();
 	  h1_energyLR_ext[index] = new TH1F(Form("h1_energy_external_barL-R_Vov%.2f_th%02.0f",Vov,vth),"",map_energyBins[Vov],map_energyMins[Vov],map_energyMaxs[Vov]);
 	}
+
+	        
+	// --- create histograms for the external bar used for requiring coincidence with the DUT
+        if( h1_energy_ref_L[index] == NULL ){
+          c_L[index] = new TCanvas(Form("c_ref_L_Vov%.2f_th%02.0f",Vov,vth), Form("c_ref_L_Vov%.2f_th%02.0f",Vov,vth));
+          c_L[index] -> cd();
+          c_L[index] ->SetLogy();
+          h1_energy_ref_L[index] = new TH1F(Form("h1_energy_ref_L_Vov%.2f_th%02.0f",Vov,vth),"",map_energyBins[Vov],map_energyMins[Vov],map_energyMaxs[Vov]);
+        }
+   
+        // --- create histograms for the external bar used for requiring coincidence with the DUT
+        if( h1_energy_ref_R[index] == NULL ){
+          c_R[index] = new TCanvas(Form("c_ref_R_Vov%.2f_th%02.0f",Vov,vth), Form("c_ref_R_Vov%.2f_th%02.0f",Vov,vth));
+          c_R[index] -> cd();
+          c_R[index] ->SetLogy();
+          h1_energy_ref_R[index] = new TH1F(Form("h1_energy_ref_R_Vov%.2f_th%02.0f",Vov,vth),"",map_energyBins[Vov],map_energyMins[Vov],map_energyMaxs[Vov]);
+        }
+
 	acceptEvent[entry] = true;
 	h1_energyLR_ext[index] -> Fill(0.5*(energyL_ext + energyR_ext));
+	h1_energy_ref_L[index] -> Fill(energyL_ext);
+	h1_energy_ref_R[index] -> Fill(energyR_ext);
       }
       std::cout << std::endl;
 
